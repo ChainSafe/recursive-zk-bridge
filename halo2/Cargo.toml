@@ -1,0 +1,19 @@
+[package]
+name = "recursive-bls-circuits"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand = "0.8.5"
+anyhow = "1.0.58"
+ark-std = { version = "0.3.0", features = ["print-trace"] }
+
+halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib.git", default-features = false, features = ["halo2-pse"] }
+halo2_proofs = { git = "https://github.com/junyu0312/halo2.git", branch = "gpu" }
+halo2ecc-s = { git = "https://github.com/DelphinusLab/halo2ecc-s.git" }
+
+[features]
+default = []
+cuda = ["halo2_proofs/cuda"]
