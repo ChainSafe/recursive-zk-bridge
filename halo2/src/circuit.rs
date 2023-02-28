@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::marker::PhantomData;
 use std::ops::{Add, Mul, Neg};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 use ark_std::{end_timer, start_timer};
@@ -21,6 +22,7 @@ use halo2_proofs::arithmetic::{CurveAffine, Field, PairingCurveAffine};
 use halo2_proofs::pairing::bn256::{G1, G1Compressed, G2, G2Affine, G2Compressed, pairing};
 use halo2_proofs::pairing::group::cofactor::CofactorCurveAffine;
 use halo2_proofs::pairing::group::{Curve, Group, GroupEncoding};
+use halo2aggregator_s::transcript::sha256::ShaWrite;
 
 use halo2ecc_s::{
     circuit::{
@@ -29,26 +31,26 @@ use halo2ecc_s::{
     },
     context::{Context, Records},
 };
-use halo2ecc_s::assign::{AssignedCondition, AssignedG2Affine};
+use halo2ecc_s::assign::{AssignedCondition, AssignedFq2, AssignedG2Affine};
 use halo2ecc_s::circuit::base_chip::BaseChipOps;
-use halo2ecc_s::circuit::ecc_chip::EccChipBaseOps;
+use halo2ecc_s::circuit::ecc_chip::{EccBaseIntegerChipWrapper, EccChipBaseOps};
 use halo2ecc_s::circuit::fq12::{Fq12ChipOps, Fq2ChipOps};
 use halo2ecc_s::circuit::pairing_chip::PairingChipOps;
 use halo2ecc_s::context::{IntegerContext, NativeScalarEccContext};
+use halo2ecc_s::utils::field_to_bn;
 use rand::rngs::OsRng;
 
-use milagro_bls::*;
 use rand::RngCore;
 
 #[derive(Clone)]
-struct TestChipConfig {
+pub struct TestChipConfig {
     base_chip_config: BaseChipConfig,
     range_chip_config: RangeChipConfig,
 }
 
 #[derive(Default, Clone)]
-struct TestCircuit<N: FieldExt> {
-    records: Records<N>,
+pub struct TestCircuit<N: FieldExt> {
+    pub records: Records<N>,
 }
 
 impl<N: FieldExt> Circuit<N> for TestCircuit<N> {
@@ -112,13 +114,14 @@ fn assign_g2(
     ctx: &mut NativeScalarEccContext<G1Affine>,
     point: G2Affine,
 ) -> AssignedG2Affine<G1Affine, Fr> {
-    let x = ctx.fq2_assign_constant((
-        point.coordinates().unwrap().x().c0,
-        point.coordinates().unwrap().x().c1,
+    let x = AssignedFq2::from((
+        ctx.base_integer_chip().assign_w(&field_to_bn(&point.coordinates().unwrap().x().c0)),
+        ctx.base_integer_chip().assign_w(&field_to_bn(&point.coordinates().unwrap().x().c1))
     ));
-    let y = ctx.fq2_assign_constant((
-        point.coordinates().unwrap().y().c0,
-        point.coordinates().unwrap().y().c1,
+
+    let y = AssignedFq2::from((
+        ctx.base_integer_chip().assign_w(&field_to_bn(&point.coordinates().unwrap().y().c0)),
+        ctx.base_integer_chip().assign_w(&field_to_bn(&point.coordinates().unwrap().y().c1))
     ));
 
     AssignedG2Affine::new(
@@ -128,7 +131,7 @@ fn assign_g2(
     )
 }
 
-fn build_bls_signature_verification_chip_over_bn256_fr_circuit(
+pub fn build_bls_signature_verification_chip_over_bn256_fr_circuit(
     verifier_key: G1Affine,
     //msg: &[u8],
     h: G2Affine,
@@ -138,11 +141,9 @@ fn build_bls_signature_verification_chip_over_bn256_fr_circuit(
     let ctx = IntegerContext::<halo2_proofs::pairing::bn256::Fq, Fr>::new(ctx);
     let mut ctx = NativeScalarEccContext::<G1Affine>(ctx);
 
-    // let h = G1Affine::random(&mut OsRng);
-
     let a_vk = ctx.assign_point(&verifier_key.to_curve());
 
-    let a_g1_neg = ctx.assign_point(&G1::generator().neg());
+    let a_g1_neg = ctx.assign_constant_point(&G1::generator().neg());
 
     let a_sig = assign_g2(&mut ctx, sig);
 
@@ -188,5 +189,34 @@ fn test_bn256_pairing_chip_over_bn256_fr() {
     let ctx = build_bls_signature_verification_chip_over_bn256_fr_circuit(
         agg_pk, h, agg_sig,
     );
+
     run_circuit_on_bn256(ctx.into(), 22);
+}
+
+pub fn test_circuit() -> TestCircuit<Fr> {
+    let kps = [
+        gen_keypair(&mut OsRng),
+        gen_keypair(&mut OsRng),
+        gen_keypair(&mut OsRng),
+    ];
+
+    let h = G2::random(&mut OsRng).to_affine();
+
+    let mut agg_pk = G1::identity().to_affine();
+    let mut agg_sig = G2::identity().to_affine();
+
+    for (sk, pk) in kps {
+        let sig = h.mul(sk);
+        agg_sig = agg_sig.add(&sig).to_affine();
+        agg_pk = agg_pk.add(pk.clone()).to_affine();
+    }
+
+    let ctx = build_bls_signature_verification_chip_over_bn256_fr_circuit(
+        agg_pk, h, agg_sig,
+    );
+
+    let ctx: Context<Fr> = ctx.into();
+    TestCircuit::<Fr> {
+        records: Arc::try_unwrap(ctx.records).unwrap().into_inner().unwrap(),
+    }
 }

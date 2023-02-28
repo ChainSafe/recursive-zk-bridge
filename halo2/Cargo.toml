@@ -1,5 +1,5 @@
 [package]
-name = "recursive-bls-circuits"
+name = "recursive-bls-circuits-halo2"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,12 +8,16 @@ edition = "2021"
 [dependencies]
 rand = "0.8.5"
 anyhow = "1.0.58"
+sha2 = "0.10.6"
 ark-std = { version = "0.3.0", features = ["print-trace"] }
 
-halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib.git", default-features = false, features = ["halo2-pse"] }
+#halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib.git", default-features = false, features = ["halo2-pse"] }
 halo2_proofs = { git = "https://github.com/junyu0312/halo2.git", branch = "gpu" }
-halo2ecc-s = { git = "https://github.com/DelphinusLab/halo2ecc-s.git" }
+halo2ecc-s = { git = "https://github.com/DelphinusLab/halo2ecc-s.git", tag = "0.2.0"}
+
+halo2aggregator-s = {path = "../../examples/halo2aggregator-s"}
 
 [features]
 default = []
-cuda = ["halo2_proofs/cuda"]
+cuda = ["halo2_proofs/cuda", "halo2ecc-s/cuda"]
+
