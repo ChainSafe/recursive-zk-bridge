@@ -1,0 +1,3 @@
+[submodule "nova-scotia/circom-pairing"]
+	path = nova-scotia/circom-pairing
+	url = https://github.com/yi-sun/circom-pairing

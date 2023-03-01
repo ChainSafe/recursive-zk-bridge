@@ -1,0 +1,11 @@
+[package]
+name = "nova-scotia"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+nova-snark = "0.12.0"
+nova-scotia = { git = "https://github.com/nalinbhardwaj/Nova-Scotia.git" }
+serde_json = "1.0.85"

@@ -10,3 +10,5 @@ Cargo.lock
 **/*.rs.bk
 
 halo2/output
+nova-scotia/build
+nova-scotia/node_modules
