@@ -12,3 +12,5 @@ Cargo.lock
 halo2/output
 nova-scotia/build
 nova-scotia/node_modules
+
+input_nova_bls_verify.json

@@ -1,6 +1,7 @@
 pragma circom 2.0.3;
 
 include "../circom-pairing/node_modules/circomlib/circuits/sha256/sha256.circom";
+include "../circom-pairing/node_modules/circomlib/circuits/bitify.circom";
 
 /**
  * Wrapper around SHA256 to support bytes as input instead of bits

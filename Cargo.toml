@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "common",
     "halo2",
     "nova-scotia"
 ]

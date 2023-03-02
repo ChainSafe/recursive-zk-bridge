@@ -63,17 +63,18 @@ template SSZArray(num_bytes, log2b) {
 
 /**
  * Implements the Simple Serialization (SSZ) method used in Ethereum 2.0 for the Phase0SyncCommittee struct
+ * @param  b          The size of the set of public keys
  * @input  pubkeys          BLS12-381 public keys for the sync committee, in bytes
  * @input  aggregate_pubkey BLS12-381 public key for the sync committee, aggregated
  * @output out              The SSZ root of [pubkeys, aggregate_pubkey]
  */
-template SSZPhase0SyncCommittee() {
-  signal input pubkeys[512][48];
+template SSZPhase0SyncCommittee(b) {
+  signal input pubkeys[b][48];
   signal input aggregate_pubkey[48];
   signal output out[32];
 
-  component ssz_pubkeys = SSZArray(32768, 10);
-  for (var i = 0; i < 512; i++) {
+  component ssz_pubkeys = SSZArray(b*64, 5);
+  for (var i = 0; i < b; i++) {
     for (var j = 0; j < 64; j++) {
       if (j < 48) {
         ssz_pubkeys.in[i*64 + j] <== pubkeys[i][j];
@@ -104,3 +105,5 @@ template SSZPhase0SyncCommittee() {
     out[i] <== hasher.out[i];
   }
 }
+
+// component main = SSZPhase0SyncCommittee(16);

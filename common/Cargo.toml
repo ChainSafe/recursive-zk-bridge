@@ -1,0 +1,21 @@
+[package]
+name = "common"
+version = "0.1.0"
+edition = "2021"
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+eyre = "0.6"
+hex = "0.4.3"
+group = "0.12"
+itertools = "0.10.5"
+milagro_bls = { path = "../../examples/milagro_bls" }
+rand = "0.8.5"
+serde = "1.0"
+serde_json = "1.0"
+ssz-rs = { git = "https://github.com/ralexstokes/ssz-rs", rev = "d09f55b4f8554491e3431e01af1c32347a8781cd" }
+
+sha2 = "0.9"
+
+hash2field = {path = "../../examples/hash2field"}
+bls12_381_plus = { path = "../../examples/bls12_381_plus", features = ["groups", "expose-fields"] }

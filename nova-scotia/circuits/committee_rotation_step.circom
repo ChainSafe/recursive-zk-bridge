@@ -3,7 +3,7 @@ pragma circom 2.0.3;
 include "./aggregate_bls_verify.circom";
 include "./simple_serialize.circom";
 
-template NovaBlsVerify(b, n, k) {
+template CommitteeRotationStep(b, n, k) {
     signal input step_in[32];
 
     signal output step_out[32];
@@ -18,6 +18,7 @@ template NovaBlsVerify(b, n, k) {
     // This requires k = 7 and n = 55
     component hashToField = HashToField(32, 2);
     for (var i=0; i < 32; i++) {
+        log(i, step_in[i]);
         hashToField.msg[i] <== step_in[i];
     }
     signal Hm[2][2][k];
@@ -25,7 +26,7 @@ template NovaBlsVerify(b, n, k) {
         for (var j=0; j < 2; j++) {
             for (var l=0; l < k; l++) {
                 Hm[i][j][l] <== hashToField.result[i][j][l];
-                log(Hm[i][j][l]);
+                log(i, j, l, Hm[i][j][l]);
             }
         }
     }
@@ -62,8 +63,7 @@ template NovaBlsVerify(b, n, k) {
 
     for (var j=0; j < 32; j++) {
         step_out[j] <== sszSyncCommittee.out[j];
-        log(step_out[j]);
     }
 }
 
-component main { public [step_in] } = NovaBlsVerify(16, 55, 7);
+component main { public [step_in] } = CommitteeRotationStep(16, 55, 7);
