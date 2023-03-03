@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+hex = "0.4.3"
 rand = "0.8.5"
 anyhow = "1.0.58"
 sha2 = "0.10.6"
@@ -13,11 +14,20 @@ ark-std = { version = "0.3.0", features = ["print-trace"] }
 
 #halo2-base = { git = "https://github.com/axiom-crypto/halo2-lib.git", default-features = false, features = ["halo2-pse"] }
 halo2_proofs = { git = "https://github.com/junyu0312/halo2.git", branch = "gpu" }
+halo2_gadgets = { git = "https://github.com/junyu0312/halo2.git", branch = "gpu" }
+#halo2_proofs = { path = "../../examples/halo2/halo2_proofs" }
+#halo2_gadgets = { path = "../../examples/halo2/halo2_gadgets" }
+
 halo2ecc-s = { git = "https://github.com/DelphinusLab/halo2ecc-s.git", tag = "0.2.0"}
 
-halo2aggregator-s = {path = "../../examples/halo2aggregator-s"}
+
+halo2aggregator-s = { git = "https://github.com/DelphinusLab/halo2aggregator-s", tag = "0.1.0"}
+
+itertools = "0.10.5"
 
 [features]
 default = []
 cuda = ["halo2_proofs/cuda", "halo2ecc-s/cuda"]
+#unstable = ["halo2_gadgets/unstable"]
+
 

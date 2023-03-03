@@ -1,8 +1,7 @@
 use halo2aggregator_s::circuits::samples::simple::SimpleCircuit;
 use halo2aggregator_s::circuits::utils::run_circuit_unsafe_full_pass;
 use halo2aggregator_s::circuits::utils::TranscriptHash;
-use halo2_proofs::pairing::bn256::Bn256;
-use halo2_proofs::pairing::bn256::Fr;
+use halo2_proofs::pairing::bn256::{Bn256, Fr};
 use std::fs::DirBuilder;
 use std::path::Path;
 use std::sync::Arc;
