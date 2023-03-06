@@ -1,18 +1,17 @@
 use std::cell::RefCell;
-use std::iter;
+use std::{fs, iter};
 use std::marker::PhantomData;
 use std::ops::{Add, Mul, Neg};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::str::FromStr;
 use std::sync::Arc;
 use ark_std::{end_timer, start_timer};
-use halo2_gadgets::sha256::{BlockWord, Sha256, Sha256Instructions, Table16Chip, Table16Config};
-
 use halo2_proofs::{
     arithmetic::{BaseExt, FieldExt},
     circuit::{Layouter, SimpleFloorPlanner},
     dev::MockProver,
-    pairing::bn256::{Bn256, Fr, G1Affine},
+    pairing::bn256::{Bn256, Fr},
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ConstraintSystem, Error,
         SingleVerifier,
@@ -21,48 +20,52 @@ use halo2_proofs::{
     transcript::{Blake2bRead, Blake2bWrite, Challenge255},
 };
 use halo2_proofs::arithmetic::{CurveAffine, Field, PairingCurveAffine};
-use halo2_proofs::pairing::bn256::{G1, G1Compressed, G2, G2Affine, G2Compressed, pairing};
+use halo2_proofs::pairing::bls12_381::{Fq, G1Affine};
+use halo2_proofs::pairing::bls12_381::{G1, G2, G2Affine, Fp2, pairing};
 use halo2_proofs::pairing::group::cofactor::CofactorCurveAffine;
 use halo2_proofs::pairing::group::{Curve, Group, GroupEncoding};
-
+use halo2_proofs::pairing::group::prime::PrimeCurveAffine;
+use sha2::Digest;
 use halo2ecc_s::{
     circuit::{
-        base_chip::{BaseChip, BaseChipConfig},
-        range_chip::{RangeChip, RangeChipConfig},
+        base_chip::{BaseChip, BaseChipConfig, BaseChipOps},
+        range_chip::{RangeChip, RangeChipConfig, RangeChipOps},
     },
     context::{Context, Records},
 };
 use halo2ecc_s::assign::{AssignedCondition, AssignedFq2, AssignedG2Affine, AssignedPoint};
-use halo2ecc_s::circuit::base_chip::BaseChipOps;
 use halo2ecc_s::circuit::ecc_chip::{EccBaseIntegerChipWrapper, EccChipBaseOps};
 use halo2ecc_s::circuit::fq12::{Fq12ChipOps, Fq2ChipOps};
 use halo2ecc_s::circuit::pairing_chip::PairingChipOps;
-use halo2ecc_s::context::{IntegerContext, NativeScalarEccContext};
+use halo2ecc_s::context::{GeneralScalarEccContext, IntegerContext, NativeScalarEccContext};
 use halo2ecc_s::utils::field_to_bn;
 use hex::ToHex;
 use itertools::Itertools;
 use rand::rngs::OsRng;
-
 use rand::RngCore;
 use sha2::digest::core_api::Block;
+use common::SlotCommitteeRotation;
+
+use crate::sha256::{BlockWord, Sha256, Sha256Instructions, Table16Chip, Table16Config};
+
 
 #[derive(Clone)]
-pub struct TestChipConfig {
+pub struct SCRotationStepConfig {
     base_chip_config: BaseChipConfig,
     range_chip_config: RangeChipConfig,
     sha256: Table16Config,
 }
 
 #[derive(Default, Clone)]
-pub struct TestCircuit {
+pub struct SCRotationStepCircuit {
     // witnesses:
     pub pub_keys: Vec<G1Affine>,
     pub signature: G2Affine,
     pub message_hash: G2Affine,
 }
 
-impl Circuit<Fr> for TestCircuit {
-    type Config = TestChipConfig;
+impl Circuit<Fr> for SCRotationStepCircuit {
+    type Config = SCRotationStepConfig;
     type FloorPlanner = SimpleFloorPlanner;
 
     fn without_witnesses(&self) -> Self {
@@ -72,7 +75,7 @@ impl Circuit<Fr> for TestCircuit {
     fn configure(meta: &mut ConstraintSystem<Fr>) -> Self::Config {
         let base_chip_config = BaseChip::configure(meta);
         let range_chip_config = RangeChip::<Fr>::configure(meta);
-        TestChipConfig {
+        SCRotationStepConfig {
             base_chip_config,
             range_chip_config,
             sha256: Table16Chip::configure(meta)
@@ -84,7 +87,7 @@ impl Circuit<Fr> for TestCircuit {
         config: Self::Config,
         mut layouter: impl Layouter<Fr>,
     ) -> Result<(), Error> {
-        let base_chip = BaseChip::new(config.base_chip_config);
+        let base_chip = BaseChip::<Fr>::new(config.base_chip_config);
         let range_chip = RangeChip::<Fr>::new(config.range_chip_config);
 
         range_chip.init_table(&mut layouter)?;
@@ -98,8 +101,7 @@ impl Circuit<Fr> for TestCircuit {
                 let timer = start_timer!(|| "assign::bls_verification");
 
                 let ctx = Rc::new(RefCell::new(Context::new()));
-                let ctx = IntegerContext::<halo2_proofs::pairing::bn256::Fq, Fr>::new(ctx);
-                let mut ctx = NativeScalarEccContext::<G1Affine>(ctx);
+                let mut ctx = GeneralScalarEccContext::<G1Affine, Fr>::new(ctx);
 
                 let mut agg_pubkey = ctx.assign_identity(); //assign_constant_point(&G1::identity());
                 for pk in &self.pub_keys {
@@ -124,10 +126,15 @@ impl Circuit<Fr> for TestCircuit {
 
                 Arc::try_unwrap(ctx.records).unwrap().into_inner().unwrap()
                     .assign_all(&mut region, &base_chip, &range_chip)?;
+
                 end_timer!(timer);
+
                 Ok(())
             },
         )?;
+
+
+        let ctx = Rc::new(RefCell::new(Context::new()));
 
         let mut agg_pk = G1::identity().to_affine();
         let mut pubkey_hexes = vec![];
@@ -146,17 +153,15 @@ impl Circuit<Fr> for TestCircuit {
                 if layer == 0 {
                     for mut pubkey_hex in pubkey_hexes.clone() {
                         pubkey_hex.resize(64, 0);
-                        let words: Vec<_> = pubkey_hex.chunks_exact(4)
-                            .map(|chunk| BlockWord(Some(u32::from_be_bytes(chunk.try_into().unwrap()))))
-                            .collect();
-                        leafs_layer.push(Sha256::digest(hash_chip.clone(), layouter.namespace(|| "ssz::pubkeys_root::leafs"), &words).unwrap().0);
+                        leafs_layer.push(Sha256::digest_bytes(hash_chip.clone(), ctx.clone(), layouter.namespace(|| "ssz::pubkeys_root::leafs"), pubkey_hex).unwrap());
                     }
                 } else {
                     leafs_layer = leafs_layer.chunks_exact(2).map(|w| Sha256::digest(
                         hash_chip.clone(),
+                        ctx.clone(),
                         layouter.namespace(|| "ssz::pubkeys_root::branches"),
-                        w.flatten()
-                    ).unwrap().0).collect_vec()
+                        w.flatten().to_vec()
+                    ).unwrap()).collect_vec()
                 }
             }
             assert_eq!(leafs_layer.len(), 1);
@@ -164,83 +169,68 @@ impl Circuit<Fr> for TestCircuit {
             leafs_layer[0]
         };
 
-
         let agg_pubkey_hash = {
             let mut bytes = agg_pk.to_bytes().as_ref().to_vec();
             bytes.resize(64, 0);
-            let words = bytes.chunks_exact(4)
-                .map(|chunk| BlockWord(Some(u32::from_be_bytes(chunk.try_into().unwrap()))))
-                .collect_vec();
 
-            Sha256::digest(hash_chip.clone(), layouter.namespace(|| "ssz::agg_pubkey_hash"), &words).unwrap().0
+            Sha256::digest_bytes(hash_chip.clone(), ctx.clone(), layouter.namespace(|| "ssz::agg_pubkey_hash"), bytes).unwrap()
         };
 
         let sync_committee_ssz = {
             let words = pubkeys_root.into_iter().chain(agg_pubkey_hash).collect_vec();
-            Sha256::digest(hash_chip.clone(), layouter.namespace(|| "ssz::sync_committee"), &words).unwrap().0
+            Sha256::digest(hash_chip.clone(), ctx.clone(), layouter.namespace(|| "ssz::sync_committee"), words).unwrap()
         };
 
-        let x = sync_committee_ssz.map(|w| w.0.unwrap().to_be_bytes()).flatten().to_vec();
+        let sync_committee_ssz = sync_committee_ssz.map(|w| w.val.get_lower_128() as u8).to_vec();
+
+        println!("{:?}", sync_committee_ssz);
 
         end_timer!(timer);
+
+        let records = Arc::try_unwrap(Rc::try_unwrap(ctx).unwrap().into_inner().records).unwrap().into_inner().unwrap();
+
+        layouter.assign_region(
+            || "bls_verification",
+            |mut region| {
+                records.assign_all(&mut region, &base_chip, &range_chip)?;
+                Ok(())
+            },
+        )?;
 
         Ok(())
     }
 }
 
 fn assign_g2(
-    ctx: &mut NativeScalarEccContext<G1Affine>,
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
     point: G2Affine,
 ) -> AssignedG2Affine<G1Affine, Fr> {
     let x = AssignedFq2::from((
-        ctx.base_integer_chip().assign_w(&field_to_bn(&point.coordinates().unwrap().x().c0)),
-        ctx.base_integer_chip().assign_w(&field_to_bn(&point.coordinates().unwrap().x().c1))
+        ctx.base_integer_chip().assign_w(&field_to_bn(&point.x.c0)),
+        ctx.base_integer_chip().assign_w(&field_to_bn(&point.x.c1))
     ));
 
     let y = AssignedFq2::from((
-        ctx.base_integer_chip().assign_w(&field_to_bn(&point.coordinates().unwrap().y().c0)),
-        ctx.base_integer_chip().assign_w(&field_to_bn(&point.coordinates().unwrap().y().c1))
+        ctx.base_integer_chip().assign_w(&field_to_bn(&point.y.c0)),
+        ctx.base_integer_chip().assign_w(&field_to_bn(&point.y.c1))
     ));
 
     AssignedG2Affine::new(
         x,
         y,
-        AssignedCondition(ctx.0.ctx.borrow_mut().assign_constant(Fr::zero())),
+        AssignedCondition(ctx.base_integer_ctx.ctx.borrow_mut().assign_constant(Fr::zero())),
     )
 }
 
-pub fn build_bls_signature_verification_chip_over_bn256_fr_circuit(
-    verifier_key: G1Affine,
-    //msg: &[u8],
-    h: G2Affine,
-    sig: G2Affine,
-) -> NativeScalarEccContext<G1Affine> {
-    let ctx = Rc::new(RefCell::new(Context::new()));
-    let ctx = IntegerContext::<halo2_proofs::pairing::bn256::Fq, Fr>::new(ctx);
-    let mut ctx = NativeScalarEccContext::<G1Affine>(ctx);
-
-    let a_vk = ctx.assign_point(&verifier_key.to_curve());
-
-    let a_g1_neg = ctx.assign_constant_point(&G1::generator().neg());
-
-    let a_sig = assign_g2(&mut ctx, sig);
-
-    let a_h = assign_g2(&mut ctx, h);
-
-    ctx.check_pairing(&[(&a_g1_neg, &a_sig), (&a_vk, &a_h)]);
-
-    ctx
-}
-
-fn gen_keypair(mut rng: impl RngCore) -> (Fr, G1) {
-    let x = Fr::random(&mut rng);
+fn gen_keypair(mut rng: impl RngCore) -> (halo2_proofs::pairing::bls12_381::Fr, G1) {
+    let x = halo2_proofs::pairing::bls12_381::Fr::random(&mut rng);
 
     (x, G1::generator().mul(x))
 }
 
 #[test]
 fn test_standalone_circuit() {
-    let circuit = test_circuit();
+    let circuit = circuit_with_input("../input_nova_bls_verify.json");
 
     let prover = match MockProver::run(22, &circuit, vec![]) {
         Ok(prover) => prover,
@@ -249,7 +239,7 @@ fn test_standalone_circuit() {
     assert_eq!(prover.verify(), Ok(()));
 }
 
-pub fn test_circuit() -> TestCircuit {
+pub fn circuit_with_random_input() -> SCRotationStepCircuit {
     let kps: Vec<_> = iter::repeat_with(|| gen_keypair(&mut OsRng)).take(16).collect();
 
     let h = G2::random(&mut OsRng).to_affine();
@@ -265,9 +255,37 @@ pub fn test_circuit() -> TestCircuit {
         pub_keys.push(pk.to_affine());
     }
 
-    TestCircuit {
+    SCRotationStepCircuit {
         pub_keys,
         signature: agg_sig,
         message_hash: h
+    }
+}
+
+pub fn circuit_with_input(p: impl AsRef<Path>) -> SCRotationStepCircuit {
+    let input = {
+        let inputs: Vec<SlotCommitteeRotation> = serde_json::from_slice(&fs::read(p).unwrap()).unwrap();
+        inputs[0].clone()
+    };
+
+    let pub_keys = input.pubkey_hexes.into_iter().map(|pk| G1Affine::from_compressed(&pk.try_into().unwrap()).unwrap()).collect_vec();
+
+    let signature = G2Affine::from_compressed(input.signature_hex.as_slice().try_into().unwrap()).unwrap();
+    let message_hash = G2Affine::from_compressed(input.hm_hex.as_slice().try_into().unwrap()).unwrap();
+
+    let mut agg_pubkey = G1::identity().to_affine();
+    for pk in &pub_keys {
+        agg_pubkey = agg_pubkey.add(pk.clone()).to_affine();
+    }
+
+    assert_eq!(
+        pairing(&G1Affine::generator(), &signature),
+        pairing(&agg_pubkey, &message_hash)
+    );
+
+    SCRotationStepCircuit {
+        pub_keys,
+        signature,
+        message_hash
     }
 }

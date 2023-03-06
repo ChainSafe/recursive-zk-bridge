@@ -3,6 +3,7 @@
 
 mod circuit;
 mod aggregation;
+mod sha256;
 
 fn main() {
     println!("Hello, ZK!");

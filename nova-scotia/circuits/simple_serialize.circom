@@ -99,6 +99,7 @@ template SSZPhase0SyncCommittee(b) {
       hasher.in[i] <== ssz_pubkeys.out[i];
     } else {
       hasher.in[i] <== ssz_aggregate_pubkey.out[i-32];
+      log(ssz_aggregate_pubkey.out[i-32]);
     }
   }
   for (var i = 0; i < 32; i++) {

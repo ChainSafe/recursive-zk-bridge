@@ -17,7 +17,7 @@ use sha2::Sha256;
 
 pub type BLSPubKey = Vector<u8, 48>;
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct SlotCommitteeRotation {
     pub old_committee_root: Vec<u8>,
     pub pubkeys: Vec<[Vec<String>; 2]>,
@@ -26,6 +26,8 @@ pub struct SlotCommitteeRotation {
     pub Hm: [[Vec<String>; 2]; 2],
     pub pubkey_hexes: Vec<Vec<u8>>,
     pub agg_pubkey_hex: Vec<u8>,
+    pub signature_hex: Vec<u8>,
+    pub hm_hex: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Default, SimpleSerialize)]
@@ -98,6 +100,8 @@ pub fn generate_mock_inputs<const V: usize>(t: usize, n: usize, out: impl AsRef<
             Hm: g2_to_array(&hm),
             pubkey_hexes,
             agg_pubkey_hex,
+            signature_hex: vec![],
+            hm_hex: vec![]
         });
 
         old_committee_root = ssz_rs::serialize(&sc).unwrap().as_slice().to_vec();

@@ -16,7 +16,7 @@ template CommitteeRotationStep(b, n, k) {
 
     // Convert the signing_root to a field element using hash_to_field
     // This requires k = 7 and n = 55
-    component hashToField = HashToField(32, 2);
+    // component hashToField = HashToField(32, 2);
     for (var i=0; i < 32; i++) {
         log(i, step_in[i]);
         hashToField.msg[i] <== step_in[i];

@@ -6,7 +6,7 @@ use std::fs::DirBuilder;
 use std::path::Path;
 use std::sync::Arc;
 use halo2ecc_s::context::Context;
-use crate::circuit::{build_bls_signature_verification_chip_over_bn256_fr_circuit, test_circuit, TestCircuit};
+use crate::circuit::{circuit_with_random_input, SCRotationStepCircuit};
 
 #[test]
 fn test_one_layer_recursion_circuit() {
@@ -15,7 +15,7 @@ fn test_one_layer_recursion_circuit() {
 
     let path = Path::new(path);
 
-    let circuit = test_circuit();
+    let circuit = circuit_with_random_input();
     let instances = vec![];
 
     let (circuit, instances) = run_circuit_unsafe_full_pass::<Bn256, _>(

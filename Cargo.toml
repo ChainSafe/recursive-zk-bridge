@@ -7,5 +7,7 @@ members = [
 ]
 
 [patch."https://github.com/junyu0312/halo2.git"]
-halo2_proofs = { git = "https://github.com/timoftime/halo2-kzg.git", branch = "gpu" }
-halo2_gadgets = { git = "https://github.com/timoftime/halo2-kzg.git", branch = "gpu" }
+halo2_proofs = { path = "../halo2-kzg/halo2_proofs" }
+halo2_gadgets = { path = "../halo2-kzg/halo2_gadgets" }
+#halo2_proofs = { git = "https://github.com/timoftime/halo2-kzg.git", branch = "gpu" }
+#halo2_gadgets = { git = "https://github.com/timoftime/halo2-kzg.git", branch = "gpu" }

@@ -14,9 +14,9 @@ fn main() {
     let root = current_dir().unwrap();
 
     let timer = start_timer!(|| "load_r1cs");
-    let circuit_file = root.join("./build/committee_rotation_step.r1cs");
+    let circuit_file = root.join("./build/committee_rotation_step_s.r1cs");
     let r1cs = load_r1cs(&FileLocation::PathBuf(circuit_file));
-    let witness_generator_file = root.join("./build/committee_rotation_step_js/committee_rotation_step.wasm");
+    let witness_generator_file = root.join("./build/committee_rotation_step_s_js/committee_rotation_step_s.wasm");
     end_timer!(timer);
 
     let timer = start_timer!(|| "create_public_params");
@@ -28,7 +28,6 @@ fn main() {
         private_input.insert("pubkeys".to_string(), json!(input.pubkeys));
         private_input.insert("pubkeybits".to_string(), json!(input.pubkeybits));
         private_input.insert("signature".to_string(), json!(input.signature));
-        // private_input.insert("hm".to_string(), json!(input.Hm));
         private_input.insert("pubkeyHex".to_string(), json!(input.pubkey_hexes));
         private_input.insert("aggregatePubkeyHex".to_string(), json!(input.agg_pubkey_hex));
 

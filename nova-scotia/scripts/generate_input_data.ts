@@ -74,6 +74,8 @@ async function generate_data(b: number = 16) {
       ];
     });
 
+
+
     resultSlots.push({
       "old_committee_root": Array.from(oldCommitteeRoot),
       "pubkeys": pubkeys,
@@ -86,6 +88,8 @@ async function generate_data(b: number = 16) {
       "agg_pubkey_hex": hexToIntArray(
           toHexString(aggPubKey)
       ),
+      "signature_hex": hexToIntArray(toHexString(aggSignature)),
+      "hm_hex": hexToIntArray(toHexString((await PointG2.hashToCurve(oldCommitteeRoot)).toRawBytes(true)))
     })
 
     const CustomSyncCommittee = new ContainerType({
