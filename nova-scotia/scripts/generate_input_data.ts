@@ -19,7 +19,12 @@ import {
   msg_hash,
   sigHexAsSnarkInput,
   hexToIntArray,
+  htfDefaults,
 } from "./bls_utils";
+
+import {
+  bls12_381
+} from "@noble/curves/bls12_381"
 
 const wasm_tester = (await import("circom_tester")).wasm;
 // const ff = require("ffjavascript");
@@ -86,10 +91,21 @@ async function generate_data(b: number = 16) {
           toHexString(aggPubKey)
       ),
       "signature_hex": hexToIntArray(toHexString(aggSignature)),
-      "hm_hex": hexToIntArray(toHexString((await PointG2.hashToCurve(oldCommitteeRoot)).toRawBytes(true)))
+      "hm_hex": hexToIntArray(toHexString((await PointG2.hashToCurve(oldCommitteeRoot, htfDefaults)).toRawBytes(true)))
     })
 
-    console.log((await PointG2.hashToCurve(oldCommitteeRoot)).x.c0.value);
+    // let G2_SWU = mapToCurveSimpleSWU(new mod<bls.Fp2>(), {
+    //   // A: new bls.Fp2(new bls.Fp(0n), new bls.Fp(240n)), // A' = 240 * I
+    //   // B: new bls.Fp2(new bls.Fp(1012n), new bls.Fp(1012n)), // B' = 1012 * (1 + I)
+    //   // Z: new bls.Fp2(new bls.Fp(-2n), new bls.Fp(-1n)), // Z: -(2 + I)
+    // });
+
+    console.log("input", oldCommitteeRoot);
+    console.log("hash", (await PointG2.hashToCurve(oldCommitteeRoot, htfDefaults)).toRawBytes(true));
+    console.log("hash2", await msg_hash(oldCommitteeRoot, "hex"));
+
+    let r= (4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559787n) ** 2n;
+    console.log("yesy", r % 16n);
 
     const CustomSyncCommittee = new ContainerType({
       pubkeys: new VectorCompositeType(new ByteVectorType(48), b),
@@ -99,7 +115,6 @@ async function generate_data(b: number = 16) {
     let sc = CustomSyncCommittee.defaultValue();
     sc.pubkeys = publicKeys;
     sc.aggregatePubkey = aggPubKey;
-    console.log(sc.pubkeys.length);
 
 
     oldCommitteeRoot = CustomSyncCommittee.hashTreeRoot(sc);

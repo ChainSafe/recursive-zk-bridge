@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use std::cmp::min;
 use std::convert::TryInto;
 use std::{fmt, iter};
-use std::ops::{Add, DerefMut, Div, Mul, Shl};
+use std::ops::{Add, DerefMut, Div, Mul, MulAssign, Shl};
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -14,7 +14,7 @@ use halo2_proofs::{arithmetic::FieldExt, circuit::{Chip, Layouter}, pairing, plo
 use halo2_proofs::arithmetic::{BaseExt, Field};
 
 use halo2_proofs::circuit::Region;
-use halo2_proofs::pairing::bls12_381::{Fq, G1, G1Affine, G2Affine};
+use halo2_proofs::pairing::bls12_381::{Fp2, Fq, G1, G1Affine, G2Affine};
 use halo2_proofs::pairing::bn256::Fr;
 use halo2_proofs::pairing::group::ff::PrimeField;
 use halo2ecc_s::{circuit::{
@@ -24,6 +24,7 @@ use halo2ecc_s::{circuit::{
 use halo2ecc_s::assign::{AssignedCondition, AssignedFq, AssignedFq2, AssignedG2Affine, AssignedInteger, AssignedValue, ValueSchema};
 use halo2ecc_s::circuit::ecc_chip::{EccBaseIntegerChipWrapper, EccChipBaseOps};
 use halo2ecc_s::circuit::fq12::Fq2ChipOps;
+use halo2ecc_s::circuit::pairing_chip::PairingChipOps;
 use halo2ecc_s::context::{GeneralScalarEccContext, IntegerContext};
 use halo2ecc_s::utils::{bn_to_field, field_to_bn};
 use itertools::Itertools;
@@ -32,8 +33,10 @@ use num_bigint::BigUint;
 use sha2::digest::typenum::private::IsEqualPrivate;
 use num_integer::Integer;
 use num_traits::{FromPrimitive, Num, One, ToPrimitive, Zero};
-use subtle::ConditionallySelectable;
+use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
 use crate::sha256::Sha256;
+use crate::utils::*;
+use crate::consts::*;
 
 const SHA256_DIGEST_SIZE: usize = 32;
 
@@ -74,10 +77,11 @@ impl HashToCurve {
     ) -> Result<AssignedG2Affine<G1Affine, Fr>, Error> {
         let fields = self.hash_to_field(msg, dst, layouter)?;
 
+        let point = self.map_to_g2(fields.clone())?;
 
         let point = AssignedG2Affine::new(
-            (fields[0][0].clone(), fields[0][1].clone()),
-            (fields[1][0].clone(), fields[1][1].clone()),
+            fields[0].clone(),
+            fields[1].clone(),
             self.main_gate.as_ref().borrow_mut().assign_bit(Fr::zero())
         );
 
@@ -89,7 +93,7 @@ impl HashToCurve {
         msg: [AssignedValue<Fr>; SHA256_DIGEST_SIZE],
         dst: impl AsRef<[u8]>,
         mut layouter: impl Layouter<Fr>
-    ) -> Result<[[AssignedFq<Fq, Fr>; 2]; 2], Error> {
+    ) -> Result<[AssignedFq2<Fq, Fr>; 2], Error> {
         let main_gate = self.main_gate.clone();
 
         let assigned_dst = dst.as_ref().iter().cloned().map(|b| main_gate.as_ref().borrow_mut().assign_constant(Fr::from(b as u64))).collect_vec();
@@ -150,46 +154,245 @@ impl HashToCurve {
                 let limbs = self.signed_fp_carry_modp(registers.clone());
                 e_d.push(limbs.iter().map(|e| e.val.get_lower_128()).collect_vec());
 
-                let mut modx = BigUint::one();
-                for i in 0..55 {
-                    modx = modx.mul(2u32)
-                }
-                let mut x = BigUint::zero();
-
-                let ls = limbs.iter().map(|e| e.val.get_lower_128()).collect_vec();
-                for i in (0..ls.len()).rev() {
-                    x = x * modx.clone() + BigUint::from(ls[i])
-                }
-
-                println!("{}", x);
+                // let mut modx = BigUint::one();
+                // for i in 0..55 {
+                //     modx = modx.mul(2u32)
+                // }
+                // let mut x = BigUint::zero();
+                //
+                // let ls = limbs.iter().map(|e| e.val.get_lower_128()).collect_vec();
+                // for i in (0..ls.len()).rev() {
+                //     x = x * modx.clone() + BigUint::from(ls[i])
+                // }
+                // println!("{}", x);
 
                 let fq = {
                     let mut ecc_ctx = GeneralScalarEccContext::<G1Affine, Fr>::new(self.main_gate.clone());
 
                     let int_ctx = ecc_ctx.base_integer_chip();
 
-                    println!("limb_bits={} limbs={}", int_ctx.range_chip().info().limb_bits, int_ctx.range_chip().info().limbs);
+                    // println!("limb_bits={} limbs={} mask={}", int_ctx.range_chip().info().limb_bits, int_ctx.range_chip().info().limbs, int_ctx.range_chip().info().limb_mask);
 
-                    // println!("bn {}", bn);
+                    // warning: limbs that represent resulted fields are encoded diffrently from how halo2ecc-s does it here (https://github.com/DelphinusLab/halo2ecc-s/blob/main/src/circuit/integer_chip.rs#L205)
+                    // recording shouldn't take a lot of constraints but is a integration hell so I'll cheat for now and do it in Rust and assign correct value
+                    // todo: leaving this in PROD is a direct vulnerability because malicious prover can inject bad values
+                    let bn = limbs_to_biguint::<55>(limbs.iter().map(|e| e.val.get_lower_128()).collect_vec());
+                    int_ctx.assign_w(&bn)
 
-                    //int_ctx.assign_w(&bn)
-
-                    let schemas = limbs.iter().zip(int_ctx.range_chip().info().limb_coeffs.clone());
-                    let native = int_ctx
-                        .base_chip().sum_with_constant(schemas.collect(), None);
-                    AssignedFq::new(limbs, native, 1)
+                    // let schemas = limbs.iter().zip(int_ctx.range_chip().info().limb_coeffs.clone());
+                    // let native = int_ctx
+                    //     .base_chip().sum_with_constant(schemas.collect(), None);
+                    // AssignedFq::new(limbs, native, 1)
                 };
 
                 e.push(fq);
             }
 
             let e: [_; 2] = e.try_into().unwrap();
-            u.push(e);
+            let [c0, c1] = e;
+            //println!("fq2={}", ass AssignedFq2::from((c0, c1)))
+            u.push(AssignedFq2::from((c0, c1)));
             u_d.push(e_d);
         }
 
 
         Ok(u.try_into().unwrap())
+    }
+
+    pub fn map_to_g2(
+        &self,
+        fields: [AssignedFq2<Fq, Fr>; 2],
+    // ) -> Result<[[AssignedFq<Fq, Fr>; 2]; 2], Error> {
+    ) -> Result<(), Error> {
+        let mut ecc_ctx = GeneralScalarEccContext::<G1Affine, Fr>::new(self.main_gate.clone());
+
+        let p1 = self.map_to_curve_simple_swu(&fields[0]);
+        let p2 = self.map_to_curve_simple_swu(&fields[1]);
+
+        let p_sum = g2_add(&p1, &p2, &mut ecc_ctx);
+
+        let res_p = self.isogeny_map_g2(&p_sum);
+
+        println!("result {:?} {:?}", assigned_fq2_to_value(&res_p.x), assigned_fq2_to_value(&res_p.y));
+
+        Ok(())
+    }
+
+    // based on draft-irtf-cfrg-hash-to-curve-16: https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#appendix-F.1-3
+    // references:
+    // - https://github.com/mikelodder7/bls12_381_plus/blob/main/src/hash_to_curve/map_g2.rs#L388
+    // - https://github.com/yi-sun/circom-pairing/blob/master/circuits/bls12_381_hash_to_G2.circom#L29
+    // - https://github.com/paulmillr/noble-curves/blob/main/src/abstract/weierstrass.ts#L1126 (different sqrt_ratio implementation)
+    pub fn map_to_curve_simple_swu(
+        &self,
+        u: &AssignedFq2<Fq, Fr>,
+    ) -> AssignedG2Affine<G1Affine, Fr> {
+    //     ) -> Result<AssignedG2<G1Affine, Fr>, Error> {
+        //     // ) -> Result<AssignedG2Affine<G1Affine, Fr>, Error> {
+        //     // ) -> Result<(), Error> {
+    // ) -> Result<(), Error> {
+        let mut ecc_ctx = GeneralScalarEccContext::<G1Affine, Fr>::new(self.main_gate.clone());
+
+        let A = ecc_ctx.fq2_assign_constant((SWU_A.c0, SWU_A.c1));
+        let B = ecc_ctx.fq2_assign_constant((SWU_B.c0, SWU_B.c1));
+        let Z = ecc_ctx.fq2_assign_constant((SWU_Z.c0, SWU_Z.c1));
+        let one = ecc_ctx.fq2_assign_one();
+
+
+        let usq = ecc_ctx.fq2_square(u); // 1.  tv1 = u^2
+        let z_usq = ecc_ctx.fq2_mul(&usq, &Z); // 2.  tv1 = Z * tv1
+        let zsq_u4 = ecc_ctx.fq2_square(&z_usq); // 3.  tv2 = tv1^2
+        let tv2 = ecc_ctx.fq2_add(&zsq_u4, &z_usq); // 4.  tv2 = tv2 + tv1
+        let tv3 = ecc_ctx.fq2_add(&tv2, &one); // 5.  tv3 = tv2 + 1
+        let x0_num = ecc_ctx.fq2_mul(&tv3, &B); // 6.  tv3 = B * tv3
+
+        let x_den = {
+            let is_zero = fq2_is_zero(&tv2, &mut ecc_ctx);
+            let tv2_neg = ecc_ctx.fq2_neg(&tv2);
+
+            fq2_bisec(&is_zero, &Z, &tv2_neg, &mut ecc_ctx)
+        }; // 7.  tv4 = CMOV(a: Z, b: -tv2, c: tv2 != 0) If c is False, CMOV returns a, otherwise it returns b.
+
+        let x_den = ecc_ctx.fq2_mul(&x_den, &A); // 8.  tv4 = A * tv4
+
+        let x0_num_sqr = ecc_ctx.fq2_square(&x0_num); // 9.  tv2 = tv3^2
+        let x_densq = ecc_ctx.fq2_square(&x_den); // 10. tv6 = tv4^2
+        let ax_densq = ecc_ctx.fq2_mul(&x_densq, &A); // 11. tv5 = A * tv6
+        let tv2 = ecc_ctx.fq2_add(&x0_num_sqr, &ax_densq); // 12. tv2 = tv2 + tv5
+        let tv2 = ecc_ctx.fq2_mul(&tv2, &x0_num); // 13. tv2 = tv2 * tv3
+        let gx_den = ecc_ctx.fq2_mul(&x_densq, &x_den); // 14. tv6 = tv6 * tv4
+        let tv5 = ecc_ctx.fq2_mul(&gx_den, &B); // 15. tv5 = B * tv6
+        let gx0_num = ecc_ctx.fq2_add(&tv2, &tv5); // 16. tv2 = tv2 + tv5
+
+        let (is_gx1_square, y_val) = {
+            let gx_den_v = assigned_fq2_to_value(&gx_den);
+            let gx0_num_v = assigned_fq2_to_value(&gx0_num);
+
+            let sqrt_candidate = {
+                let vsq = gx_den_v.square(); // v^2
+                let v_3 = vsq * gx_den_v; // v^3
+                let v_4 = vsq.square(); // v^4
+                let uv_7 = gx0_num_v * v_3 * v_4; // u v^7
+                let uv_15 = uv_7 * v_4.square(); // u v^15
+                uv_7 * chain_p2m9div16(&uv_15) // u v^7 (u v^15) ^ ((p^2 - 9) // 16)
+            };
+
+            let mut is_gx0_square = Choice::from(0);
+            // set y = sqrt_candidate * Fp2::one(), check candidate against other roots of unity
+            let mut y = sqrt_candidate;
+            // check Fp2(0, 1)
+            let tmp = Fp2 {
+                c0: -sqrt_candidate.c1,
+                c1: sqrt_candidate.c0,
+            };
+            is_gx0_square = (tmp.square() * gx_den_v).ct_eq(&gx0_num_v);
+            y.conditional_assign(&tmp, is_gx0_square);
+
+            // check Fp2(RV1, RV1)
+            let tmp = sqrt_candidate * SWU_RV1;
+            is_gx0_square = (tmp.square() * gx_den_v).ct_eq(&gx0_num_v);
+            y.conditional_assign(&tmp, is_gx0_square);
+            // check Fp2(RV1, -RV1)
+            let tmp = Fp2 {
+                c0: tmp.c1,
+                c1: -tmp.c0,
+            };
+            is_gx0_square = (tmp.square() * gx_den_v).ct_eq(&gx0_num_v);
+            y.conditional_assign(&tmp, is_gx0_square);
+
+            let mut is_gx1_square = Choice::from(0);
+
+            let gx1_num = gx0_num_v * assigned_fq2_to_value(&z_usq) * assigned_fq2_to_value(&zsq_u4);
+            // compute g(x1(u)) * u^3
+            let sqrt_candidate = sqrt_candidate * assigned_fq2_to_value(&usq) * assigned_fq2_to_value(&u);
+            for eta in &SWU_ETAS[..] {
+                let tmp = sqrt_candidate * eta;
+                let found = (tmp.square() * gx_den_v).ct_eq(&gx1_num);
+                y.conditional_assign(&tmp, found);
+                is_gx1_square |= found;
+            }
+
+            // one of gX0 or gX1 must be a square!
+            assert!(is_gx0_square.unwrap_u8() == 1 || is_gx1_square.unwrap_u8() == 1);
+
+            let is_gx1_square = self.main_gate.as_ref().borrow_mut().assign_bit(Fr::from(is_gx1_square.unwrap_u8() as u64));
+
+            (is_gx1_square, y)
+        };
+
+        let x = ecc_ctx.fq2_mul(&z_usq, &x0_num); // 17.  x = tv1 * tv3
+        let x = fq2_bisec(&is_gx1_square, &x, &x0_num, &mut ecc_ctx); // 21.  x = CMOV(x, tv3, is_gx1_square)
+        let y = assign_fq2(&y_val, &mut ecc_ctx);
+
+
+        let u_sgn = is_fq2_sgn0(&u, &mut ecc_ctx);
+        let y_sgn = is_fq2_sgn0(&y, &mut ecc_ctx);
+        let to_neg = ecc_ctx.base_integer_chip().base_chip().xor(&u_sgn, &y_sgn);
+
+        let y_neg = ecc_ctx.fq2_neg(&y);
+        let y = fq2_bisec(&to_neg, &y_neg, &y, &mut ecc_ctx);
+
+        // 25.   x = x / tv4
+        let x = {
+            let x_den_inv = ecc_ctx.fq2_unsafe_invert(&x_den);
+
+            ecc_ctx.fq2_mul(&x, &x_den_inv)
+        };
+
+        // let y = ecc_ctx.fq2_mul(&tv1, u); // 19.  y = tv1 * u  -> Z * u^3 * y1
+        // let y = ecc_ctx.fq2_mul(&y, &y1); // 20.  y = y * y1
+        // let y = fq2_bisec(&is_sqrt, &y1, &y, &mut ecc_ctx); // 22.  y = CMOV(y, y1, is_gx1_square)
+
+        // let e1: AssignedCondition<Fr> { }; // 23.  e1 = sgn0(u) == sgn0(y)
+        // let y = {
+        //     let y_neg = ecc_ctx.fq2_neg(&y);
+        //     fq2_bisec(&e1, &y, &y_neg, &mut ecc_ctx)
+        // };// 24.   y = CMOV(-y, y, e1)
+        //
+        // let x: AssignedFq2<Fq, Fr> = {}; // 25.   x = x / tv4
+        //
+        // Ok([x, y])
+
+        let is_inf = ecc_ctx.base_integer_chip().base_chip().assign_bit(Fr::one());
+        AssignedG2Affine::new(x, y, is_inf)
+    }
+
+    // based on draft-irtf-cfrg-hash-to-curve-16: https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#appendix-E.3
+    // references:
+    // - https://github.com/yi-sun/circom-pairing/blob/master/circuits/bls12_381_hash_to_G2.circom#L246
+    // - https://github.com/mikelodder7/bls12_381_plus/blob/main/src/g2.rs#L1131
+    // - https://github.com/paulmillr/noble-curves/blob/main/src/bls12-381.ts#L743
+    pub fn isogeny_map_g2(
+        &self,
+        p: &AssignedG2Affine<G1Affine, Fr>,
+    ) -> AssignedG2Affine<G1Affine, Fr> {
+        let mut ecc_ctx = GeneralScalarEccContext::<G1Affine, Fr>::new(self.main_gate.clone());
+
+        let coeffs = [ISO_XNUM.to_vec(), ISO_XDEN.to_vec(), ISO_YNUM.to_vec(), ISO_YDEN.to_vec()].map(|coeffs| {
+            coeffs.into_iter().map(|c| ecc_ctx.fq2_assign_constant((c.c0, c.c1))).collect_vec()
+        });
+
+        let [x_num, x_den, y_num, y_den] = coeffs.map(|coeffs| {
+            let acc = ecc_ctx.fq2_assign_zero();
+            coeffs.into_iter().fold(acc, |acc, v| {
+                let acc = ecc_ctx.fq2_mul(&acc, &p.x);
+                ecc_ctx.fq2_add(&acc, &v)
+            })
+        });
+
+
+        let x = {
+            let x_den_inv = ecc_ctx.fq2_unsafe_invert(&x_den);
+            ecc_ctx.fq2_mul(&x_num, &x_den_inv)
+        };
+
+        let y = {
+            let y_den_inv = ecc_ctx.fq2_unsafe_invert(&y_den);
+            let tv = ecc_ctx.fq2_mul(&y_num, &y_den_inv);
+            ecc_ctx.fq2_mul(&p.y, &tv)
+        };
+
+        AssignedG2Affine::new(x, y, p.z)
     }
 
     pub fn expand_message_xmd(
@@ -399,7 +602,6 @@ impl HashToCurve {
 
             // println!("dividend {:?}", dividend);
 
-
             quotient[i] = {
                 let scale = (1 << n) / (1 + p[k - 1]);
                 let norm_a = Self::long_scalar_mult::<8>(n, scale, &dividend.clone().try_into().unwrap());
@@ -563,6 +765,7 @@ impl HashToCurve {
     }
 }
 
+
 #[cfg(test)]
 mod tests {
     use std::ptr::hash;
@@ -612,7 +815,7 @@ mod tests {
 
                 let assigned_input = input.map(|i| ctx.as_ref().borrow_mut().assign(Fr::from(i)));
 
-                let g2 = hash2curve.hash_to_field(assigned_input, DST, layouter.namespace(|| "hash_to_g2")).unwrap();
+                let g2 = hash2curve.hash_to_g2(assigned_input, DST, layouter.namespace(|| "hash_to_g2")).unwrap();
 
                 drop(hash2curve);
 

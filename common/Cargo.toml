@@ -18,4 +18,4 @@ ssz-rs = { git = "https://github.com/ralexstokes/ssz-rs", rev = "d09f55b4f855449
 sha2 = "0.9"
 
 hash2field = {path = "../../examples/hash2field"}
-bls12_381_plus = { path = "../../examples/bls12_381_plus", features = ["groups", "expose-fields"] }
+#bls12_381_plus = { path = "../../examples/bls12_381_plus", features = ["groups", "expose-fields"] }

@@ -16,16 +16,17 @@
     "@chainsafe/blst": "^0.2.4",
     "@chainsafe/lodestar-config": "^0.39.0",
     "@chainsafe/lodestar-types": "^0.39.0",
+    "@chainsafe/ssz": "^0.10.2",
     "@lodestar/api": "^0.40.0",
     "@lodestar/light-client": "^0.40.0",
     "@lodestar/types": "^0.40.0",
-    "@chainsafe/ssz": "^0.10.2",
     "@noble/bls12-381": "^1.2.0",
-    "tsx": ">=3.7.0",
-    "typescript": ">=4.5.0",
-    "ts-node": "^10.9.1",
+    "@noble/curves": "file:../../../examples/noble-curves",
     "@types/node": "^18.0.4",
-    "circom_tester": "^0.0.14"
+    "circom_tester": "^0.0.14",
+    "ts-node": "^10.9.1",
+    "tsx": ">=3.7.0",
+    "typescript": ">=4.5.0"
   },
   "devDependencies": {
     "chai": "4.3.7"

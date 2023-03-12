@@ -17,7 +17,7 @@
 // Some projects may prefer to swap this relation, it is not supported for now.
 
 import nodeCrypto from "crypto";
-import { PointG1, PointG2 } from "@noble/bls12-381";
+import { PointG1, PointG2, Fp2 } from "@noble/bls12-381";
 
 // To verify curve parameters, see pairing-friendly-curves spec:
 // https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-pairing-friendly-curves-09
@@ -357,8 +357,6 @@ export async function msg_hash(
 
   let u = await hash_to_field(msg, 2);
 
-  console.log("u[0][0]", u[0][0]);
-
   if (returnType === "hex") {
     return [
       ["0x" + u[0][0].toString(16), "0x" + u[0][1].toString(16)],
@@ -412,3 +410,4 @@ export async function msg_uint_8_to_array(message: Uint8Array) {
 }
 
 // msg_uint_8_to_array(stringToBytes("abcdefghij"));
+

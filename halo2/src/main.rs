@@ -9,6 +9,8 @@ mod circuit;
 mod aggregation;
 mod sha256;
 mod hash2curve;
+mod utils;
+mod consts;
 
 fn main() {
     println!("Hello, ZK!");
