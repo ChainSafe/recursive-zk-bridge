@@ -1,7 +1,7 @@
-mod mock_generator;
+mod inputs_generator;
 
-use crate::mock_generator::generate_mock_inputs;
-pub use crate::mock_generator::SlotCommitteeRotation;
+use crate::inputs_generator::generate_mock_inputs;
+pub use crate::inputs_generator::SlotCommitteeRotation;
 
 #[test]
 fn generate() {

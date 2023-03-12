@@ -10,7 +10,7 @@ use serde_json::json;
 use common::SlotCommitteeRotation;
 
 fn main() {
-    let iteration_count = 2;
+    let iteration_count = 1;
     let root = current_dir().unwrap();
 
     let timer = start_timer!(|| "load_r1cs");

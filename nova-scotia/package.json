@@ -27,5 +27,8 @@
     "@types/node": "^18.0.4",
     "circom_tester": "^0.0.14"
   },
+  "devDependencies": {
+    "chai": "4.3.7"
+  },
   "type": "module"
 }

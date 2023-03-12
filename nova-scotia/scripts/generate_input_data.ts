@@ -54,7 +54,6 @@ async function generate_data(b: number = 16) {
 
   var oldCommitteeRoot = Uint8Array.from(Array(32).fill(0));
 
-
   var resultSlots = [];
 
   for (let i = 0; i < slots; i++) {
@@ -74,8 +73,6 @@ async function generate_data(b: number = 16) {
       ];
     });
 
-
-
     resultSlots.push({
       "old_committee_root": Array.from(oldCommitteeRoot),
       "pubkeys": pubkeys,
@@ -91,6 +88,8 @@ async function generate_data(b: number = 16) {
       "signature_hex": hexToIntArray(toHexString(aggSignature)),
       "hm_hex": hexToIntArray(toHexString((await PointG2.hashToCurve(oldCommitteeRoot)).toRawBytes(true)))
     })
+
+    console.log((await PointG2.hashToCurve(oldCommitteeRoot)).x.c0.value);
 
     const CustomSyncCommittee = new ContainerType({
       pubkeys: new VectorCompositeType(new ByteVectorType(48), b),

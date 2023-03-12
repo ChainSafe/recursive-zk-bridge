@@ -265,12 +265,16 @@ async function expand_message_xmd(
   const ell = Math.ceil(lenInBytes / b_in_bytes);
   if (ell > 255) throw new Error("Invalid xmd length");
   const DST_prime = concatBytes(DST, i2osp(DST.length, 1));
+
   const Z_pad = i2osp(0, r_in_bytes);
+
   const l_i_b_str = i2osp(lenInBytes, 2);
+
   const b = new Array<Uint8Array>(ell);
   const b_0 = await H(
     concatBytes(Z_pad, msg, l_i_b_str, i2osp(0, 1), DST_prime)
   );
+
   b[0] = await H(concatBytes(b_0, i2osp(1, 1), DST_prime));
   for (let i = 1; i <= ell; i++) {
     const args = [strxor(b_0, b[i - 1]), i2osp(i + 1, 1), DST_prime];
@@ -301,9 +305,9 @@ async function hash_to_field(
   const DST = stringToBytes(htfOptions.DST);
 
   let pseudo_random_bytes = msg;
+
   if (htfOptions.expand) {
     pseudo_random_bytes = await expand_message_xmd(msg, DST, len_in_bytes);
-    // console.log("result", pseudo_random_bytes.toString());
   }
   const u = new Array(count);
   for (let i = 0; i < count; i++) {
@@ -352,6 +356,8 @@ export async function msg_hash(
   msg = msg as unknown as Uint8Array;
 
   let u = await hash_to_field(msg, 2);
+
+  console.log("u[0][0]", u[0][0]);
 
   if (returnType === "hex") {
     return [

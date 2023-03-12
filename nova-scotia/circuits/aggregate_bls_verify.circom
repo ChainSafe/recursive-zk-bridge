@@ -351,6 +351,8 @@ template HashToField(msg_len, count) {
   component byte_to_bits[count][m][num_registers];
   component bits_to_num[count][m][num_registers][2];
 
+  // log(num_registers);
+
   for (var i = 0; i < count; i++) {
     for (var j = 0; j < m; j++) {
       for (var idx = 0; idx < num_registers; idx++)
@@ -403,8 +405,10 @@ template HashToField(msg_len, count) {
   for (var i = 0; i < count; i++) {
     for (var j = 0; j < m; j++) {
       red[i][j] = PrimeReduce(bits_per_register, 7, num_registers - 7, p, log_extra + 2*bits_per_register);
-      for (var k = 0; k < num_registers; k++)
+      for (var k = 0; k < num_registers; k++) {
+        // ("bytes_to_bigint[", i, "][", j, "][", k, "] =", bytes_to_bigint[i][j][k]);
         red[i][j].in[k] <== bytes_to_bigint[i][j][k];
+      }
 
       modders[i][j] = SignedFpCarryModP(bits_per_register, 7, log_extra + 2*bits_per_register, p);
       for (var k = 0; k < 7; k++) {
@@ -418,6 +422,7 @@ template HashToField(msg_len, count) {
     for (var j = 0; j < m; j++) {
       for (var k = 0; k < 7; k++) {
         result[i][j][k] <== modders[i][j].out[k];
+        log("result", i, j, k, result[i][j][k]);
       }
     }
   }

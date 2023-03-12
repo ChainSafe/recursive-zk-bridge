@@ -16,20 +16,18 @@ template CommitteeRotationStep(b, n, k) {
 
     // Convert the signing_root to a field element using hash_to_field
     // This requires k = 7 and n = 55
-    // component hashToField = HashToField(32, 2);
-    // for (var i=0; i < 32; i++) {
-    //     log(i, step_in[i]);
-    //     hashToField.msg[i] <== step_in[i];
-    // }
-    // signal Hm[2][2][k];
-    // for (var i=0; i < 2; i++) {
-    //     for (var j=0; j < 2; j++) {
-    //         for (var l=0; l < k; l++) {
-    //             Hm[i][j][l] <== hashToField.result[i][j][l];
-    //             log(i, j, l, Hm[i][j][l]);
-    //         }
-    //     }
-    // }
+    component hashToField = HashToField(32, 2);
+    for (var i=0; i < 32; i++) {
+        hashToField.msg[i] <== step_in[i];
+    }
+    signal Hm[2][2][k];
+    for (var i=0; i < 2; i++) {
+        for (var j=0; j < 2; j++) {
+            for (var l=0; l < k; l++) {
+                Hm[i][j][l] <== hashToField.result[i][j][l];
+            }
+        }
+    }
 
     // component aggregateVerify = AggregateVerify(b, n, k);
 
@@ -63,7 +61,6 @@ template CommitteeRotationStep(b, n, k) {
 
     for (var j=0; j < 32; j++) {
         step_out[j] <== sszSyncCommittee.out[j];
-        log(j, step_out[j]);
     }
 }
 

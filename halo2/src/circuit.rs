@@ -45,9 +45,11 @@ use rand::rngs::OsRng;
 use rand::RngCore;
 use sha2::digest::core_api::Block;
 use common::SlotCommitteeRotation;
+use crate::hash2curve::HashToCurve;
 
 use crate::sha256::{BlockWord, Sha256, Sha256Instructions, Table16Chip, Table16Config};
 
+const DST: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
 
 #[derive(Clone)]
 pub struct SCRotationStepConfig {
@@ -61,7 +63,8 @@ pub struct SCRotationStepCircuit {
     // witnesses:
     pub pub_keys: Vec<G1Affine>,
     pub signature: G2Affine,
-    pub message_hash: G2Affine,
+    pub message_hash_point: G2Affine,
+    pub message_hash: [u8; 32],
 }
 
 impl Circuit<Fr> for SCRotationStepCircuit {
@@ -95,6 +98,32 @@ impl Circuit<Fr> for SCRotationStepCircuit {
         Table16Chip::load(config.sha256.clone(), &mut layouter)?;
         let hash_chip = Table16Chip::construct(config.sha256.clone());
 
+        let hash_point = {
+            let mut ctx = Context::new();
+
+            let msg = self.message_hash.map(|b| ctx.assign(Fr::from(b as u64)));
+
+            let ctx = Rc::new(RefCell::new(ctx));
+
+            let hash2curve = HashToCurve::new(ctx.clone(), hash_chip.clone());
+
+            let g2 = hash2curve.hash_to_g2(msg, DST, layouter.namespace(|| "hash-to-curve"))?;
+
+            drop(hash2curve);
+
+            let records = Arc::try_unwrap(Rc::try_unwrap(ctx).unwrap().into_inner().records).unwrap().into_inner().unwrap();
+
+            layouter.assign_region(
+                || "bls_verification",
+                |mut region| {
+                    records.assign_all(&mut region, &base_chip, &range_chip)?;
+                    Ok(())
+                },
+            )?;
+
+            g2
+        };
+
         layouter.assign_region(
             || "bls_verification",
             |mut region| {
@@ -118,9 +147,27 @@ impl Circuit<Fr> for SCRotationStepCircuit {
 
                 let a_sig = assign_g2(&mut ctx, self.signature);
 
-                let a_h = assign_g2(&mut ctx, self.message_hash);
+                let a_h = assign_g2(&mut ctx, self.message_hash_point);
 
-                ctx.check_pairing(&[(&a_g1_neg, &a_sig), (&agg_pubkey, &a_h)]);
+                // assert_eq!(a_h, hash_point);
+
+                println!("x: ({{{:?}, {}}}, {{{:?}, {}}}), y: ({{{:?}, {}}}, {{{:?}, {}}}), z: {}",
+                         hash_point.x.0.limbs_le.iter().map(|e| e.val.get_lower_128()).collect_vec(), hash_point.x.0.native.val.get_lower_128(),
+                         hash_point.x.1.limbs_le.iter().map(|e| e.val.get_lower_128()).collect_vec(), hash_point.x.1.native.val.get_lower_128(),
+                         hash_point.y.0.limbs_le.iter().map(|e| e.val.get_lower_128()).collect_vec(), hash_point.y.0.native.val.get_lower_128(),
+                         hash_point.y.1.limbs_le.iter().map(|e| e.val.get_lower_128()).collect_vec(), hash_point.y.1.native.val.get_lower_128(),
+                         hash_point.z.0.val.get_lower_128()
+                );
+
+                println!("x: ({{{:?}, {}}}, {{{:?}, {}}}), y: ({{{:?}, {}}}, {{{:?}, {}}}), z: {}",
+                         a_h.x.0.limbs_le.iter().map(|e| e.val.get_lower_128()).collect_vec(), a_h.x.0.native.val.get_lower_128(),
+                         a_h.x.1.limbs_le.iter().map(|e| e.val.get_lower_128()).collect_vec(), a_h.x.1.native.val.get_lower_128(),
+                         a_h.y.0.limbs_le.iter().map(|e| e.val.get_lower_128()).collect_vec(), a_h.y.0.native.val.get_lower_128(),
+                         a_h.y.1.limbs_le.iter().map(|e| e.val.get_lower_128()).collect_vec(), a_h.y.1.native.val.get_lower_128(),
+                         a_h.z.0.val.get_lower_128()
+                );
+
+                ctx.check_pairing(&[(&a_g1_neg, &a_sig), (&agg_pubkey, &hash_point)]);
 
                 let ctx: Context<Fr> = ctx.into();
 
@@ -132,7 +179,6 @@ impl Circuit<Fr> for SCRotationStepCircuit {
                 Ok(())
             },
         )?;
-
 
         let ctx = Rc::new(RefCell::new(Context::new()));
 
@@ -258,7 +304,8 @@ pub fn circuit_with_random_input() -> SCRotationStepCircuit {
     SCRotationStepCircuit {
         pub_keys,
         signature: agg_sig,
-        message_hash: h
+        message_hash_point: h,
+        message_hash: [0; 32]
     }
 }
 
@@ -278,6 +325,8 @@ pub fn circuit_with_input(p: impl AsRef<Path>) -> SCRotationStepCircuit {
         agg_pubkey = agg_pubkey.add(pk.clone()).to_affine();
     }
 
+    println!("bn input {}", field_to_bn(&message_hash.x.c0));
+
     assert_eq!(
         pairing(&G1Affine::generator(), &signature),
         pairing(&agg_pubkey, &message_hash)
@@ -286,6 +335,7 @@ pub fn circuit_with_input(p: impl AsRef<Path>) -> SCRotationStepCircuit {
     SCRotationStepCircuit {
         pub_keys,
         signature,
-        message_hash
+        message_hash_point: message_hash,
+        message_hash: input.old_committee_root.try_into().unwrap()
     }
 }
