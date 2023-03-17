@@ -20,16 +20,8 @@ import {
   sigHexAsSnarkInput,
   hexToIntArray,
   htfDefaults,
+  sign,
 } from "./bls_utils";
-
-import {
-  bls12_381
-} from "@noble/curves/bls12_381"
-
-const wasm_tester = (await import("circom_tester")).wasm;
-// const ff = require("ffjavascript");
-// exports.p = ff.Scalar.fromString("21888242871839275222246405745257275088548364400416034343698204186575808495617");
-// const Fr = new ff.F1Field(exports.p);
 
 var n: number = 55;
 var k: number = 7;
@@ -65,8 +57,7 @@ async function generate_data(b: number = 16) {
     let signing_keys = getMultipleRandom(privateKeys, b);
     const publicKeys = signing_keys.map(bls.getPublicKey);
     const aggPubKey = bls.aggregatePublicKeys(publicKeys);
-
-    const signatures = await Promise.all(privateKeys.map(p => bls.sign(oldCommitteeRoot, p)));
+    const signatures = await Promise.all(privateKeys.map(p => sign(oldCommitteeRoot, p)));
     const aggSignature = bls.aggregateSignatures(signatures);
 
     const pubkeys = publicKeys.map((pubkey, idx: number) => {
@@ -94,19 +85,6 @@ async function generate_data(b: number = 16) {
       "hm_hex": hexToIntArray(toHexString((await PointG2.hashToCurve(oldCommitteeRoot, htfDefaults)).toRawBytes(true)))
     })
 
-    // let G2_SWU = mapToCurveSimpleSWU(new mod<bls.Fp2>(), {
-    //   // A: new bls.Fp2(new bls.Fp(0n), new bls.Fp(240n)), // A' = 240 * I
-    //   // B: new bls.Fp2(new bls.Fp(1012n), new bls.Fp(1012n)), // B' = 1012 * (1 + I)
-    //   // Z: new bls.Fp2(new bls.Fp(-2n), new bls.Fp(-1n)), // Z: -(2 + I)
-    // });
-
-    console.log("input", oldCommitteeRoot);
-    console.log("hash", (await PointG2.hashToCurve(oldCommitteeRoot, htfDefaults)).toRawBytes(true));
-    console.log("hash2", await msg_hash(oldCommitteeRoot, "hex"));
-
-    let r= (4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559787n) ** 2n;
-    console.log("yesy", r % 16n);
-
     const CustomSyncCommittee = new ContainerType({
       pubkeys: new VectorCompositeType(new ByteVectorType(48), b),
       aggregatePubkey: new ByteVectorType(48),
@@ -122,7 +100,7 @@ async function generate_data(b: number = 16) {
   }
 
   fs.writeFileSync(
-      "../input_nova_bls_verify.json",
+      "../input.json",
       JSON.stringify(resultSlots, (_, v) => typeof v === 'bigint' ? v.toString() : v)
   );
 }

@@ -1,26 +1,28 @@
-use std::{collections::HashMap, env::current_dir, fs, time::Instant};
 use ark_std::{end_timer, start_timer};
+use std::{collections::HashMap, env::current_dir, fs, time::Instant};
 
+use common::SlotCommitteeRotation;
 use nova_scotia::{
     circom::reader::load_r1cs, create_public_params, create_recursive_circuit, FileLocation, F1,
     G1, G2,
 };
 use nova_snark::{traits::Group, CompressedSNARK};
 use serde_json::json;
-use common::SlotCommitteeRotation;
 
 fn main() {
     let iteration_count = 1;
     let root = current_dir().unwrap();
 
     let timer = start_timer!(|| "load_r1cs");
-    let circuit_file = root.join("./build/committee_rotation_step_s.r1cs");
+    let circuit_file = root.join("./build/committee_rotation_step.r1cs");
     let r1cs = load_r1cs(&FileLocation::PathBuf(circuit_file));
-    let witness_generator_file = root.join("./build/committee_rotation_step_s_js/committee_rotation_step_s.wasm");
+    let witness_generator_file =
+        root.join("./build/committee_rotation_step_s_js/committee_rotation_step.wasm");
     end_timer!(timer);
 
     let timer = start_timer!(|| "create_public_params");
-    let inputs: Vec<SlotCommitteeRotation> = serde_json::from_slice(&fs::read("../input_nova_bls_verify.json").unwrap()).unwrap();
+    let inputs: Vec<SlotCommitteeRotation> =
+        serde_json::from_slice(&fs::read("../input.json").unwrap()).unwrap();
 
     let mut private_inputs = Vec::new();
     for input in inputs {
@@ -29,7 +31,10 @@ fn main() {
         private_input.insert("pubkeybits".to_string(), json!(input.pubkeybits));
         private_input.insert("signature".to_string(), json!(input.signature));
         private_input.insert("pubkeyHex".to_string(), json!(input.pubkey_hexes));
-        private_input.insert("aggregatePubkeyHex".to_string(), json!(input.agg_pubkey_hex));
+        private_input.insert(
+            "aggregatePubkeyHex".to_string(),
+            json!(input.agg_pubkey_hex),
+        );
 
         private_inputs.push(private_input);
     }
@@ -66,7 +71,7 @@ fn main() {
         start_public_input.clone(),
         &pp,
     )
-        .unwrap();
+    .unwrap();
     end_timer!(timer);
 
     // TODO: empty?

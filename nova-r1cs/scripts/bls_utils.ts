@@ -131,6 +131,12 @@ export const utils = {
   mod,
 };
 
+export async function sign(message: Uint8Array, privateKey: Uint8Array): Promise<Uint8Array> {
+  const msgPoint = await PointG2.hashToCurve(message, htfDefaults);
+  const sigPoint = msgPoint.multiply(BigInt('0x' + bytesToHex(privateKey)));
+  return sigPoint.toSignature();
+}
+
 const hexes = Array.from({ length: 256 }, (v, i) =>
   i.toString(16).padStart(2, "0")
 );
@@ -148,6 +154,14 @@ export function formatHex(str: string): string {
     str = str.slice(2);
   }
   return str;
+}
+
+function bytesToBigInt(uint8a: Uint8Array) {
+  let result = BigInt(0);
+  for (let i = uint8a.length - 1; i >= 0; i--) {
+    result = result * BigInt(256) + BigInt(uint8a[i]);
+  }
+  return result;
 }
 
 export function hexToBytes(hex: string): Uint8Array {
