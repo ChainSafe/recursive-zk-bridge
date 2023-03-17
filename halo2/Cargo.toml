@@ -1,5 +1,5 @@
 [package]
-name = "recursive-bls-circuits-halo2"
+name = "committee-rotation-halo2"
 version = "0.1.0"
 edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -12,14 +12,13 @@ halo2_gadgets = { git = "https://github.com/junyu0312/halo2.git", branch = "gpu"
 halo2_proofs = { git = "https://github.com/junyu0312/halo2.git", branch = "gpu" }
 halo2aggregator-s = { git = "https://github.com/DelphinusLab/halo2aggregator-s", tag = "0.1.0" }
 halo2ecc-s = { git = "https://github.com/DelphinusLab/halo2ecc-s.git", tag = "0.2.0" }
-#halo2ecc-s = { path = "../../examples/halo2ecc-s" }
 hex = "0.4.3"
 itertools = "0.10.5"
 rand = "0.8.5"
 sha2 = "0.10.6"
 serde_json = "1.0.93"
 subtle = "2.3"
-milagro_bls = { path = "../../examples/milagro_bls" }
+milagro_bls = {git = "https://github.com/Snowfork/milagro_bls"} #{ path = "../../examples/milagro_bls" }
 num-bigint = "0.4.3"
 num-integer = "0.1.45"
 num-traits = "0.2.15"

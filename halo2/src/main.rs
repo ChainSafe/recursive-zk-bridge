@@ -5,13 +5,13 @@
 
 extern crate core;
 
-mod circuit;
 mod aggregation;
-mod sha256;
-mod hash2curve;
-mod utils;
+mod circuit;
 mod consts;
+mod hash2curve;
+mod sha256;
+mod utils;
 
 fn main() {
-    println!("Hello, ZK!");
+
 }

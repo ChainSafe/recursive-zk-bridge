@@ -6,22 +6,22 @@ use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::cmp::min;
 use std::convert::TryInto;
-use std::{fmt, iter};
 use std::ops::{DerefMut, Shl};
 use std::rc::Rc;
 use std::sync::Arc;
-
+use std::{fmt, iter};
 use halo2_proofs::{
     arithmetic::FieldExt,
     circuit::{Chip, Layouter},
     plonk::Error,
 };
-
-pub use halo2_gadgets::sha256::{BlockWord, Table16Chip, Table16Config, Sha256Instructions};
 use halo2_gadgets::sha256::{AssignedBits, RoundWordDense, State};
+pub use halo2_gadgets::sha256::{BlockWord, Sha256Instructions, Table16Chip, Table16Config};
 use halo2_proofs::circuit::Region;
 use halo2_proofs::pairing::bn256::Fr;
 use halo2_proofs::pairing::group::ff::PrimeField;
+use halo2ecc_s::assign::{AssignedValue, ValueSchema};
+use halo2ecc_s::utils::{bn_to_field, field_to_bn};
 use halo2ecc_s::{
     circuit::{
         base_chip::{BaseChip, BaseChipConfig, BaseChipOps},
@@ -29,13 +29,11 @@ use halo2ecc_s::{
     },
     context::{Context, Records},
 };
-use halo2ecc_s::assign::{AssignedValue, ValueSchema};
-use halo2ecc_s::utils::{bn_to_field, field_to_bn};
 use itertools::Itertools;
 use num_bigint::BigUint;
-use sha2::digest::typenum::private::IsEqualPrivate;
 use num_integer::Integer;
 use num_traits::Num;
+use sha2::digest::typenum::private::IsEqualPrivate;
 
 /// The size of a SHA-256 block, in 32-bit words.
 pub const BLOCK_SIZE: usize = 16;
@@ -59,7 +57,11 @@ pub struct Sha256 {
 
 impl Sha256 {
     /// Create a new hasher instance.
-    pub fn new(chip: Table16Chip, ctx: Rc<RefCell<Context<Fr>>>, mut layouter: impl Layouter<Fr>) -> Result<Self, Error> {
+    pub fn new(
+        chip: Table16Chip,
+        ctx: Rc<RefCell<Context<Fr>>>,
+        mut layouter: impl Layouter<Fr>,
+    ) -> Result<Self, Error> {
         let state = chip.initialization_vector(&mut layouter)?;
         Ok(Sha256 {
             chip,
@@ -108,13 +110,19 @@ impl Sha256 {
             let assinged_padding = padding
                 .iter()
                 .map(|val| {
-                    hasher.main_gate.as_ref().borrow_mut().assign(
-                        Fr::from_u128(*val as u128)
-                    )
+                    hasher
+                        .main_gate
+                        .as_ref()
+                        .borrow_mut()
+                        .assign(Fr::from_u128(*val as u128))
                 })
                 .collect_vec();
 
-            assinged_inputs.clone().into_iter().chain(assinged_padding).collect_vec()
+            assinged_inputs
+                .clone()
+                .into_iter()
+                .chain(assinged_padding)
+                .collect_vec()
         };
 
         for (i, assigned_input_block) in assigned_padded_inputs
@@ -127,21 +135,22 @@ impl Sha256 {
                 .collect::<Vec<u8>>();
             let blockword_inputs = input_block
                 .chunks(32 / 8)
-                .map(|chunk| {
-                    BlockWord(Some(u32::from_be_bytes(chunk.try_into().unwrap())))
-                })
+                .map(|chunk| BlockWord(Some(u32::from_be_bytes(chunk.try_into().unwrap()))))
                 .collect_vec();
 
-            hasher.state = hasher.compute_round(&mut layouter, blockword_inputs.as_slice().try_into().unwrap()).unwrap();
+            hasher.state = hasher
+                .compute_round(
+                    &mut layouter,
+                    blockword_inputs.as_slice().try_into().unwrap(),
+                )
+                .unwrap();
         }
 
-        let digest =  hasher.state_to_assigned_halves(&hasher.state)?;
-        //
-        // let res = hasher.decompose_digest_to_bytes(&mut layouter, &digest).unwrap();
-        //
-        // //Ok(assigned_padded_inputs.into_iter().take(32).collect_vec().try_into().unwrap())
-        // Ok(iter::repeat_with(|| hasher.main_gate.as_ref().borrow_mut().assign(Fr::one())).take(24).chain(res.into_iter().take(8)).collect_vec().try_into().unwrap())
-        hasher.decompose_digest_to_bytes(&mut layouter, &digest).map(|d| d.as_slice().try_into().unwrap())
+        let digest = hasher.state_to_assigned_halves(&hasher.state)?;
+
+        hasher
+            .decompose_digest_to_bytes(&mut layouter, &digest)
+            .map(|d| d.as_slice().try_into().unwrap())
     }
 
     pub fn digest_bytes(
@@ -150,12 +159,13 @@ impl Sha256 {
         mut layouter: impl Layouter<Fr>,
         inputs: impl AsRef<[u8]>,
     ) -> Result<[AssignedValue<Fr>; DIGEST_SIZE * 4], Error> {
-        let assigned_inputs = inputs.as_ref()
+        let assigned_inputs = inputs
+            .as_ref()
             .iter()
             .map(|val| {
-                ctx.as_ref().borrow_mut().assign(
-                    Fr::from_u128(*val as u128)
-                )
+                ctx.as_ref()
+                    .borrow_mut()
+                    .assign(Fr::from_u128(*val as u128))
             })
             .collect_vec();
 
@@ -193,9 +203,12 @@ impl Sha256 {
     ) -> Result<AssignedValue<Fr>, Error> {
         let (lo, hi) = word.halves();
         let mut main_gate = self.main_gate();
-        let u16 = main_gate.as_ref().borrow_mut().assign_constant(Fr::from(1 << 16));
+        let u16 = main_gate
+            .as_ref()
+            .borrow_mut()
+            .assign_constant(Fr::from(1 << 16));
 
-        let val_u32 = word.value();
+        let val_u32 = word.value().or_else(|| Some(1));
         let val_lo = val_u32.map(|v| Fr::from_u128((v % (1 << 16)) as u128));
         let val_hi = val_u32.map(|v| Fr::from_u128((v >> 16) as u128));
         let assigned_lo = main_gate.as_ref().borrow_mut().assign(val_lo.unwrap());
@@ -203,7 +216,13 @@ impl Sha256 {
         // TODO ctx.constrain_equal(lo.cell(), assigned_lo.cell)?;
         // ctx.constrain_equal(hi.cell(), assigned_hi.cell)?;
 
-        let res = main_gate.as_ref().borrow_mut().mul_add(&assigned_hi, &u16, Fr::one(), &assigned_lo, Fr::one());
+        let res = main_gate.as_ref().borrow_mut().mul_add(
+            &assigned_hi,
+            &u16,
+            Fr::one(),
+            &assigned_lo,
+            Fr::one(),
+        );
 
         Ok(res)
     }
@@ -217,16 +236,16 @@ impl Sha256 {
 
         let last_state = &self.state;
         let last_digest = self.state_to_assigned_halves(last_state)?;
-        let compressed_state =
-            self.chip.compress(layouter, last_state, input)?;
+        let compressed_state = self.chip.compress(layouter, last_state, input)?;
 
-        let compressed_state_values =
-            self.state_to_assigned_halves( &compressed_state)?;
+        let compressed_state_values = self.state_to_assigned_halves(&compressed_state)?;
 
         let word_sums = last_digest
             .iter()
             .zip(&compressed_state_values)
-            .map(|(digest_word, comp_word)| main_gate.as_ref().borrow_mut().add(digest_word, comp_word))
+            .map(|(digest_word, comp_word)| {
+                main_gate.as_ref().borrow_mut().add(digest_word, comp_word)
+            })
             .collect_vec();
 
         let u32_mod = 1u128 << 32;
@@ -247,16 +266,27 @@ impl Sha256 {
             .iter()
             .map(|(lo, hi)| main_gate.as_ref().borrow_mut().assign(*hi))
             .collect_vec();
-        let u32 = main_gate.as_ref().borrow_mut().assign_constant(Fr::from(1 << 32));
+        let u32 = main_gate
+            .as_ref()
+            .borrow_mut()
+            .assign_constant(Fr::from(1 << 32));
 
         let combines = assigned_los
             .iter()
             .zip(&assigned_his)
-            .map(|(lo, hi)| main_gate.as_ref().borrow_mut().mul_add(hi, &u32, Fr::one(), lo, Fr::one()))
+            .map(|(lo, hi)| {
+                main_gate
+                    .as_ref()
+                    .borrow_mut()
+                    .mul_add(hi, &u32, Fr::one(), lo, Fr::one())
+            })
             .collect_vec();
 
         for (combine, word_sum) in combines.iter().zip(&word_sums) {
-            main_gate.as_ref().borrow_mut().assert_equal(combine, word_sum);
+            main_gate
+                .as_ref()
+                .borrow_mut()
+                .assert_equal(combine, word_sum);
         }
 
         let mut new_state_word_vals = [0u32; 8];
@@ -265,7 +295,9 @@ impl Sha256 {
         }
 
         let new_state = self
-            .chip.config().compression
+            .chip
+            .config()
+            .compression
             .initialize_with_iv(layouter, new_state_word_vals)?;
 
         Ok(new_state)
@@ -279,8 +311,7 @@ impl Sha256 {
         let main_gate = self.main_gate();
         let mut assigned_bytes = Vec::new();
         for word in digest.into_iter() {
-            let mut bytes = self.decompose(word.val, 8, 32)?
-                .1;
+            let mut bytes = self.decompose(word.val, 8, 32)?.1;
             bytes.reverse();
             assigned_bytes.append(&mut bytes);
         }
@@ -311,8 +342,15 @@ impl Sha256 {
         let mut bases = vec![Fr::one()];
         let mut bases_assigned = vec![];
         for i in 1..31 {
-            bases.push(bases[i-1].mul(&Fr::from(0x0000000000000000000000000000000000000000000000000000000000000100)));
-            bases_assigned.push(self.main_gate.as_ref().borrow_mut().assign_constant(bases[i]));
+            bases.push(bases[i - 1].mul(&Fr::from(
+                0x0000000000000000000000000000000000000000000000000000000000000100,
+            )));
+            bases_assigned.push(
+                self.main_gate
+                    .as_ref()
+                    .borrow_mut()
+                    .assign_constant(bases[i]),
+            );
         }
 
         let terms: Vec<_> = decomposed
@@ -322,9 +360,12 @@ impl Sha256 {
             .map(|(limb, base)| (limb, *base))
             .collect();
 
-        let zero = self.main_gate.as_ref().borrow_mut().assign_constant(Fr::zero());
-        self.
-            decompose_terms(&terms[..], zero)
+        let zero = self
+            .main_gate
+            .as_ref()
+            .borrow_mut()
+            .assign_constant(Fr::zero());
+        self.decompose_terms(&terms[..], zero)
     }
 
     /// Assigns a new witness composed of given array of terms
@@ -357,8 +398,21 @@ impl Sha256 {
 
         let mut assigned: Vec<AssignedValue<Fr>> = vec![];
         for (i, chunk) in terms.chunks(4).enumerate() {
-            let intermediate = (remaining, self.main_gate.as_ref().borrow_mut().assign_constant(-Fr::one()));
-            let constant = if i == 0 { constant } else { self.main_gate.as_ref().borrow_mut().assign_constant(Fr::zero()) };
+            let intermediate = (
+                remaining,
+                self.main_gate
+                    .as_ref()
+                    .borrow_mut()
+                    .assign_constant(-Fr::one()),
+            );
+            let constant = if i == 0 {
+                constant
+            } else {
+                self.main_gate
+                    .as_ref()
+                    .borrow_mut()
+                    .assign_constant(Fr::zero())
+            };
             let mut chunk = chunk.to_vec();
 
             let composed = {
@@ -370,13 +424,17 @@ impl Sha256 {
                 res
             };
 
-            remaining = self.main_gate.as_ref().borrow_mut().sub(&remaining, &composed);
+            remaining = self
+                .main_gate
+                .as_ref()
+                .borrow_mut()
+                .sub(&remaining, &composed);
 
             let is_final = i == number_of_chunks - 1;
             // Final round
             let mut chunk = if is_final {
                 // Sanity check
-               // remaining.assert_if_known(Field::is_zero_vartime);
+                // remaining.assert_if_known(Field::is_zero_vartime);
 
                 // Assign last term to the first column to enable overflow range check
                 let last_term = chunk.pop().unwrap();
@@ -395,7 +453,8 @@ impl Sha256 {
                 .cloned()
                 // .chain(iter::repeat(Term::Zero).take(5 - chunk.len() - 1))
                 .chain(iter::once(intermediate))
-                .map(|(c, b)| c).collect_vec();
+                .map(|(c, b)| c)
+                .collect_vec();
 
             // Set the result at the first iter
             if i == 0 {
@@ -449,13 +508,27 @@ pub fn modulus<F: FieldExt>() -> BigUint {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use halo2_proofs::pairing::bn256::{Bn256, G1Affine};
+    use halo2_proofs::plonk::{
+        create_proof, keygen_pk, keygen_vk, verify_proof, SingleVerifier, VerifyingKey,
+    };
+    use halo2_proofs::poly::commitment::{Params, ParamsVerifier};
+    use halo2_proofs::transcript::{Blake2bRead, Blake2bWrite};
     use halo2_proofs::{
         arithmetic::FieldExt,
         circuit::{Layouter, SimpleFloorPlanner},
         dev::MockProver,
+        pairing,
         plonk::{Advice, Circuit, Column, ConstraintSystem, Error},
     };
+    use halo2aggregator_s::circuits::samples::simple::SimpleCircuit;
+    use halo2aggregator_s::circuits::utils::{
+        load_or_build_vkey, load_vkey, run_circuit_unsafe_full_pass, TranscriptHash,
+    };
+    use rand::rngs::OsRng;
     use sha2::Digest;
+    use std::io::BufReader;
+    use std::path::Path;
 
     #[test]
     fn test_sha256_circuit() {
@@ -479,9 +552,6 @@ mod tests {
                 mut layouter: impl Layouter<Fr>,
             ) -> Result<(), Error> {
                 let base_chip = BaseChip::<Fr>::new(config.0.clone());
-                //let range_chip = RangeChip::<Fr>::new(config.1.clone());
-
-                // range_chip.init_table(&mut layouter)?;
 
                 Table16Chip::load(config.1.clone(), &mut layouter)?;
                 let hash_chip = Table16Chip::construct(config.1.clone());
@@ -490,22 +560,26 @@ mod tests {
 
                 let inputs = [0; 64];
 
-                let digest = Sha256::digest_bytes(hash_chip, ctx.clone(), layouter.namespace(|| "sha256"), inputs.clone()).unwrap();
+                let digest = Sha256::digest_bytes(
+                    hash_chip,
+                    ctx.clone(),
+                    layouter.namespace(|| "sha256"),
+                    inputs.clone(),
+                )
+                .unwrap();
 
-                let to_sum = iter::repeat_with(|| ctx.as_ref().borrow_mut().assign(Fr::one())).take(32).collect_vec();
-                to_sum.into_iter().zip(digest.to_vec()).for_each(|(a,b)| { ctx.as_ref().borrow_mut().add(&a, &b); } );
+                let bytes = digest
+                    .into_iter()
+                    .map(|e| e.val.get_lower_128() as u8)
+                    .collect::<Vec<_>>();
 
+                assert_eq!(bytes, sha2::Sha256::digest(inputs).to_vec(),);
 
-                let bytes = digest.into_iter().map(|e| e.val.get_lower_128() as u8).collect::<Vec<_>>();
+                let records = Arc::try_unwrap(Rc::try_unwrap(ctx).unwrap().into_inner().records)
+                    .unwrap()
+                    .into_inner()
+                    .unwrap();
 
-                println!("{:?}", bytes);
-
-                // assert_eq!(
-                //     bytes,
-                //     sha2::Sha256::digest(inputs).to_vec(),
-                // );
-
-                let records = Arc::try_unwrap(Rc::try_unwrap(ctx).unwrap().into_inner().records).unwrap().into_inner().unwrap();
 
                 layouter.assign_region(
                     || "assign",
@@ -520,6 +594,19 @@ mod tests {
         }
 
         let circuit = MyCircuit {};
+
+        // let path = Path::new("./build");
+        // run_circuit_unsafe_full_pass::<Bn256, _>(
+        //     path,
+        //     "sha256",
+        //     17,
+        //     vec![circuit],
+        //     vec![vec![]],
+        //     TranscriptHash::Sha,
+        //     vec![],
+        //     true,
+        // );
+
         let prover = match MockProver::<Fr>::run(17, &circuit, vec![]) {
             Ok(prover) => prover,
             Err(e) => panic!("{:?}", e),

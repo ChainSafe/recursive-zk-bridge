@@ -2,16 +2,15 @@ use eyre::Result;
 use std::fs;
 use std::path::{Path, PathBuf};
 // use bls12_381_plus::{ExpandMsgXmd, G1Projective, G2Projective};
-use itertools::Itertools;
-use milagro_bls::{AggregatePublicKey, AggregateSignature, Signature};
-use milagro_bls::amcl_utils::{Big, DBig, FP, FP2, GroupG1, GroupG2, hash_to_curve_g2, MODULUS};
-use rand::rngs::OsRng;
-use rand::{Rng, seq::IteratorRandom, thread_rng};
 use group::{Curve, GroupEncoding};
+use itertools::Itertools;
+use milagro_bls::amcl_utils::{hash_to_curve_g2, Big, DBig, GroupG1, GroupG2, FP, FP2, MODULUS};
+use milagro_bls::{AggregatePublicKey, AggregateSignature, Signature};
+use rand::rngs::OsRng;
+use rand::{seq::IteratorRandom, thread_rng, Rng};
 use sha2::digest::generic_array::typenum::Gr;
 
 use ssz_rs::prelude::*;
-
 
 use sha2::Sha256;
 

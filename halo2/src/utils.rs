@@ -1,22 +1,34 @@
-use std::ops::{Mul, MulAssign};
 use halo2_proofs::arithmetic::FieldExt;
-use halo2_proofs::pairing::bls12_381::{Fp2, Fq, G1Affine, G2Affine};
+use halo2_proofs::pairing;
+use halo2_proofs::pairing::bls12_381::{Fp2, Fq, G1Affine, G2Affine, G2};
 use halo2_proofs::pairing::bn256::Fr;
-use halo2ecc_s::assign::{AssignedCondition, AssignedFq2, AssignedG2Affine};
+use halo2_proofs::pairing::group::prime::PrimeCurveAffine;
+use halo2ecc_s::assign::{
+    AssignedCondition, AssignedFq2, AssignedG2, AssignedG2Affine, AssignedInteger,
+};
 use halo2ecc_s::circuit::base_chip::BaseChipOps;
-use halo2ecc_s::circuit::ecc_chip::EccBaseIntegerChipWrapper;
+use halo2ecc_s::circuit::ecc_chip::{EccBaseIntegerChipWrapper, EccChipScalarOps};
 use halo2ecc_s::circuit::fq12::Fq2ChipOps;
-use halo2ecc_s::context::GeneralScalarEccContext;
+use halo2ecc_s::circuit::integer_chip::IntegerChipOps;
+use halo2ecc_s::circuit::pairing_chip::PairingChipOps;
+use halo2ecc_s::context::{Context, GeneralScalarEccContext};
 use halo2ecc_s::utils::{bn_to_field, field_to_bn};
 use itertools::Itertools;
 use num_bigint::BigUint;
 use num_traits::{One, ToPrimitive, Zero};
+use std::cell::RefCell;
+use std::ops::{Mul, MulAssign};
+use std::rc::Rc;
+use subtle::Choice;
 
 pub fn fq_from(n: u64) -> Fq {
     Fq::from_raw_unchecked([n, 0, 0, 0, 0, 0])
 }
 
-pub fn fq2_is_zero(f: &AssignedFq2<Fq, Fr>, ctx: &mut GeneralScalarEccContext<G1Affine, Fr>) -> AssignedCondition<Fr> {
+pub fn fq2_is_zero(
+    f: &AssignedFq2<Fq, Fr>,
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
+) -> AssignedCondition<Fr> {
     let c0_zero = ctx.base_integer_chip().is_int_zero(&f.0);
     let c1_zero = ctx.base_integer_chip().is_int_zero(&f.1);
 
@@ -27,7 +39,7 @@ pub fn fq2_bisec(
     cond: &AssignedCondition<Fr>,
     a: &AssignedFq2<Fq, Fr>,
     b: &AssignedFq2<Fq, Fr>,
-    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
 ) -> AssignedFq2<Fq, Fr> {
     let c0 = ctx.base_integer_chip().bisec_int(cond, &a.0, &b.0);
     let c1 = ctx.base_integer_chip().bisec_int(cond, &a.1, &b.1);
@@ -37,34 +49,38 @@ pub fn fq2_bisec(
 
 pub fn assigned_fq2_to_value(u: &AssignedFq2<Fq, Fr>) -> Fp2 {
     let c0 = {
-        let ls = u.0.limbs_le.iter().map(|v| v.val.get_lower_128()).collect_vec();
+        let ls =
+            u.0.limbs_le
+                .iter()
+                .map(|v| v.val.get_lower_128())
+                .collect_vec();
         let bn = limbs_to_biguint::<108>(ls);
         bn_to_field::<Fq>(&bn)
     };
-    // let c0 = Fq::from_raw_unchecked(c0_limbs.try_into().unwrap());
+
     let c1 = {
-        let ls = u.1.limbs_le.iter().map(|v| v.val.get_lower_128()).collect_vec();
+        let ls =
+            u.1.limbs_le
+                .iter()
+                .map(|v| v.val.get_lower_128())
+                .collect_vec();
         let bn = limbs_to_biguint::<108>(ls);
         bn_to_field::<Fq>(&bn)
     };
 
-
-    Fp2{
-        c0,
-        c1
-    }
+    Fp2 { c0, c1 }
 }
 
 pub fn assign_fq2(u: &Fp2, ctx: &mut GeneralScalarEccContext<G1Affine, Fr>) -> AssignedFq2<Fq, Fr> {
     AssignedFq2::from((
         ctx.base_integer_chip().assign_w(&field_to_bn(&u.c0)),
-        ctx.base_integer_chip().assign_w(&field_to_bn(&u.c1))
+        ctx.base_integer_chip().assign_w(&field_to_bn(&u.c1)),
     ))
 }
 
 pub fn is_fq2_sgn0(
     u: &AssignedFq2<Fq, Fr>,
-    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
 ) -> AssignedCondition<Fr> {
     let t = assigned_fq2_to_value(&u);
     let is_odd = if t.c0.is_zero().unwrap_u8() == 1 {
@@ -73,7 +89,9 @@ pub fn is_fq2_sgn0(
         t.c0.to_bytes()[47] & 1 == 1
     };
 
-    ctx.base_integer_chip().base_chip().assign_bit(Fr::from(!is_odd))
+    ctx.base_integer_chip()
+        .base_chip()
+        .assign_bit(Fr::from(!is_odd))
 }
 
 // fn is_fq_sgn0(
@@ -113,29 +131,72 @@ pub fn biguint_to_limbs<const K: usize, const N: usize>(x: BigUint) -> [u128; K]
     res
 }
 
-fn assign_g2(
+pub fn fq2_conjugate(
+    u: &AssignedFq2<Fq, Fr>,
     ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
-    point: G2Affine,
+) -> AssignedFq2<Fq, Fr> {
+    let c0 = u.0.clone();
+    let c1 = ctx.base_integer_chip().int_neg(&u.1);
+
+    AssignedFq2::from((c0, c1))
+}
+
+pub fn assign_g2(
+    point: &G2Affine,
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
 ) -> AssignedG2Affine<G1Affine, Fr> {
     let x = AssignedFq2::from((
         ctx.base_integer_chip().assign_w(&field_to_bn(&point.x.c0)),
-        ctx.base_integer_chip().assign_w(&field_to_bn(&point.x.c1))
+        ctx.base_integer_chip().assign_w(&field_to_bn(&point.x.c1)),
     ));
 
     let y = AssignedFq2::from((
         ctx.base_integer_chip().assign_w(&field_to_bn(&point.y.c0)),
-        ctx.base_integer_chip().assign_w(&field_to_bn(&point.y.c1))
+        ctx.base_integer_chip().assign_w(&field_to_bn(&point.y.c1)),
     ));
 
     AssignedG2Affine::new(
         x,
         y,
-        AssignedCondition(ctx.base_integer_ctx.ctx.borrow_mut().assign_constant(Fr::zero())),
+        AssignedCondition(
+            ctx.base_integer_ctx
+                .ctx
+                .borrow_mut()
+                .assign_constant(Fr::zero()),
+        ),
     )
 }
 
+pub fn g2affine_bisec(
+    cond: &AssignedCondition<Fr>,
+    a: &AssignedG2Affine<G1Affine, Fr>,
+    b: &AssignedG2Affine<G1Affine, Fr>,
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
+) -> AssignedG2Affine<G1Affine, Fr> {
+    let x = fq2_bisec(cond, &a.x, &b.x, ctx);
+    let y = fq2_bisec(cond, &a.y, &b.y, ctx);
+    let z = ctx
+        .base_integer_chip()
+        .base_chip()
+        .bisec_cond(cond, &a.z, &b.z);
 
-pub fn g2_add(
+    AssignedG2Affine::new(x, y, z)
+}
+
+pub fn g2_bisec(
+    cond: &AssignedCondition<Fr>,
+    a: &AssignedG2<G1Affine, Fr>,
+    b: &AssignedG2<G1Affine, Fr>,
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
+) -> AssignedG2<G1Affine, Fr> {
+    let x = fq2_bisec(cond, &a.x, &b.x, ctx);
+    let y = fq2_bisec(cond, &a.y, &b.y, ctx);
+    let z = fq2_bisec(cond, &a.z, &b.z, ctx);
+
+    AssignedG2::new(x, y, z)
+}
+
+pub fn g2affine_add(
     a: &AssignedG2Affine<G1Affine, Fr>,
     b: &AssignedG2Affine<G1Affine, Fr>,
     ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
@@ -146,7 +207,6 @@ pub fn g2_add(
         let dx_inv = ctx.fq2_unsafe_invert(&diff_x);
         ctx.fq2_mul(&diff_y, &dx_inv)
     };
-
 
     //  x_3 = lambda^2 - x_1 - x_2 (mod p)
     let lambda_sq = ctx.fq2_square(&lambda);
@@ -161,6 +221,278 @@ pub fn g2_add(
     AssignedG2Affine::new(x_3, y_3, a.z)
 }
 
+pub fn g2_add(
+    a: &AssignedG2<G1Affine, Fr>,
+    b: &AssignedG2<G1Affine, Fr>,
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
+) -> AssignedG2<G1Affine, Fr> {
+    if assigned_fq2_to_value(&a.z).is_zero().unwrap_u8() == 1 {
+        return AssignedG2::new(b.x.clone(), b.y.clone(), b.z.clone());
+    }
+    // println!("a.z={:?}", assigned_fq2_to_value(&a.z).is_zero());
+    // println!("b.z={:?}", assigned_fq2_to_value(&b.z));
+    //if (a.z.isZero()) return b;
+    // if (b.isZero()) return a;
+    let x1 = a.x.clone();
+    let y1 = a.y.clone();
+    let z1 = a.z.clone();
+    let x2 = b.x.clone();
+    let y2 = b.y.clone();
+    let z2 = b.z.clone();
+    let u1 = ctx.fq2_mul(&y2, &z1);
+    let u2 = ctx.fq2_mul(&y1, &z2);
+    let v = ctx.fq2_mul(&x2, &z1); // x2.multiply(z1);
+    let v2 = ctx.fq2_mul(&x1, &z2); // x1.multiply(z2);
+                                    // if assigned_fq2_to_value(&v).eq(&assigned_fq2_to_value(&v2)) && assigned_fq2_to_value(&u1).eq(&assigned_fq2_to_value(&u2)) {
+                                    //     println!("V1.equals(V2) && U1.equals(U2)");
+                                    //     return g2_double(&a, ctx)
+                                    // }
+                                    // if (v.equals(v2)) return this.getZero();
+    let u = ctx.fq2_sub(&u1, &u2); // u1.subtract(u2);
+    let v = ctx.fq2_sub(&v, &v2); // v.subtract(v2);
+    let vv = ctx.fq2_mul(&v, &v); // v.multiply(v);
+    let vvv = ctx.fq2_mul(&vv, &v); // vv.multiply(v);
+    let v2vv = ctx.fq2_mul(&v2, &vv); // v2.multiply(vv);
+    let w = ctx.fq2_mul(&z1, &z2); // z1.multiply(z2);
+    let A = {
+        let t = ctx.fq2_mul(&u, &u);
+        let t = ctx.fq2_mul(&t, &w);
+        let t = ctx.fq2_sub(&t, &vvv);
+        let t2 = fq2_mul_constant(&v2vv, 2, ctx);
+        ctx.fq2_sub(&t, &t2)
+    };
+
+    let x3 = ctx.fq2_mul(&v, &A); // V.multiply(A);
+    let y3 = {
+        let t = ctx.fq2_sub(&v2vv, &A);
+        let t = ctx.fq2_mul(&u, &t);
+        let t2 = ctx.fq2_mul(&vvv, &u2);
+        ctx.fq2_sub(&t, &t2)
+    };
+    let z3 = ctx.fq2_mul(&vvv, &w); // VVV.multiply(w);
+    AssignedG2::new(x3, y3, z3)
+}
+
+pub fn fq2_mul_constant(
+    u: &AssignedFq2<Fq, Fr>,
+    c: u64,
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
+) -> AssignedFq2<Fq, Fr> {
+    let c0 = ctx.base_integer_chip().int_mul_small_constant(&u.0, c);
+    let c1 = ctx.base_integer_chip().int_mul_small_constant(&u.1, c);
+
+    AssignedFq2::from((c0, c1))
+}
+
+pub fn g2_sub(
+    a: &AssignedG2Affine<G1Affine, Fr>,
+    b: &AssignedG2Affine<G1Affine, Fr>,
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
+) -> AssignedG2Affine<G1Affine, Fr> {
+    let b_neg = ctx.g2_neg(&b);
+    g2affine_add(&a, &b_neg, ctx)
+}
+
+pub fn g2_double(
+    p: &AssignedG2<G1Affine, Fr>,
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
+) -> AssignedG2<G1Affine, Fr> {
+    //let p = ctx.g2affine_to_g2(p);
+    let w = {
+        let t = ctx.fq2_mul(&p.x, &p.x);
+        fq2_mul_constant(&t, 3, ctx)
+    };
+    let s = ctx.fq2_mul(&p.y, &p.z);
+    let ss = ctx.fq2_mul(&s, &s);
+    let sss = ctx.fq2_mul(&ss, &s);
+    let b = {
+        let t = ctx.fq2_mul(&p.x, &p.y);
+        ctx.fq2_mul(&t, &s)
+    };
+    let h = {
+        let t = ctx.fq2_mul(&w, &w);
+        let t2 = fq2_mul_constant(&b, 8, ctx);
+        ctx.fq2_sub(&t, &t2)
+    };
+    let x3 = {
+        let t = ctx.fq2_mul(&h, &s);
+        fq2_mul_constant(&t, 2, ctx)
+    };
+    let y3 = {
+        let t = fq2_mul_constant(&b, 4, ctx);
+        let t = ctx.fq2_sub(&t, &h);
+        let t = ctx.fq2_mul(&w, &t);
+        let t2 = ctx.fq2_mul(&p.y, &p.y);
+        let t2 = fq2_mul_constant(&t2, 8, ctx);
+        let t2 = ctx.fq2_mul(&t2, &ss);
+        ctx.fq2_sub(&t, &t2)
+    };
+    let z3 = fq2_mul_constant(&sss, 8, ctx);
+    AssignedG2::new(x3, y3, z3)
+}
+
+pub fn g2_mul_x(
+    p: &AssignedG2<G1Affine, Fr>,
+    mut x: u64,
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
+) -> AssignedG2<G1Affine, Fr> {
+    let mut acc = {
+        let x = ctx.fq2_assign_zero();
+        let y = ctx.fq2_assign_one();
+        let z = ctx.fq2_assign_zero();
+        AssignedG2::new(x, y, z)
+    };
+    // let mut acc = assign_g2(ctx, G2Affine::identity());
+    let mut double = AssignedG2::new(p.x.clone(), p.y.clone(), p.z.clone());
+
+    let mut bits = vec![];
+    let mut i = 0;
+    while x > 0 {
+        bits.push(if x % 2 == 1 { 1 } else { 0 });
+        let bit = ctx
+            .base_integer_chip()
+            .base_chip()
+            .assign_bit(Fr::from((x % 2 == 1) as u64));
+        let acc_d = g2_add(&acc, &double, ctx);
+        acc = g2_bisec(&bit, &acc_d, &acc, ctx);
+        // println!("[{i}] point {:?} {:?} {:?}", assigned_fq2_to_value(&acc.x), assigned_fq2_to_value(&acc.y), assigned_fq2_to_value(&acc.z));
+
+        double = g2_double(&double, ctx);
+        // println!("[{i}] double {:?} {:?} {:?}", assigned_fq2_to_value(&double.x), assigned_fq2_to_value(&double.y), assigned_fq2_to_value(&double.z));
+
+        x >>= 1;
+        i += 1;
+    }
+
+    acc
+}
+
+pub fn g2_to_affine(
+    p: &AssignedG2<G1Affine, Fr>,
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
+) -> AssignedG2Affine<G1Affine, Fr> {
+    let z_inv = ctx.fq2_unsafe_invert(&p.z);
+    let x = ctx.fq2_mul(&p.x, &z_inv);
+    let y = ctx.fq2_mul(&p.y, &z_inv);
+    let z = ctx.base_integer_chip().base_chip().assign_bit(Fr::zero());
+    AssignedG2Affine::new(x, y, z)
+}
+
+pub fn g2_neg(
+    p: &AssignedG2<G1Affine, Fr>,
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
+) -> AssignedG2<G1Affine, Fr> {
+    let y = ctx.fq2_neg(&p.y);
+    AssignedG2::new(p.x.clone(), y, p.z.clone())
+}
+
+pub fn g2_psi(
+    p: &AssignedG2<G1Affine, Fr>,
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
+) -> AssignedG2<G1Affine, Fr> {
+    // 1 / ((u+1) ^ ((q-1)/3))
+    let psi_coeff_x = assign_fq2(
+        &Fp2 {
+            c0: Fq::zero(),
+            c1: Fq::from_raw_unchecked([
+                0x890dc9e4867545c3,
+                0x2af322533285a5d5,
+                0x50880866309b7e2c,
+                0xa20d1b8c7e881024,
+                0x14e4f04fe2db9068,
+                0x14e56d3f1564853a,
+            ]),
+        },
+        ctx,
+    );
+    // 1 / ((u+1) ^ (p-1)/2)
+    let psi_coeff_y = assign_fq2(
+        &Fp2 {
+            c0: Fq::from_raw_unchecked([
+                0x3e2f585da55c9ad1,
+                0x4294213d86c18183,
+                0x382844c88b623732,
+                0x92ad2afd19103e18,
+                0x1d794e4fac7cf0b9,
+                0x0bd592fc7d825ec8,
+            ]),
+            c1: Fq::from_raw_unchecked([
+                0x7bcfa7a25aa30fda,
+                0xdc17dec12a927e7c,
+                0x2f088dd86b4ebef1,
+                0xd1ca2087da74d4a7,
+                0x2da2596696cebc1d,
+                0x0e2b7eedbbfd87d2,
+            ]),
+        },
+        ctx,
+    );
+
+    let x_frob = fq2_conjugate(&p.x, ctx);
+    let y_frob = fq2_conjugate(&p.y, ctx);
+
+    let x = ctx.fq2_mul(&x_frob, &psi_coeff_x);
+    let y = ctx.fq2_mul(&y_frob, &psi_coeff_y);
+    let z = fq2_conjugate(&p.z, ctx);
+
+    AssignedG2::new(x, y, z)
+}
+
+pub fn g2affine_double(
+    p: &AssignedG2Affine<G1Affine, Fr>,
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
+) -> AssignedG2Affine<G1Affine, Fr> {
+    let two_y = fq2_mul_constant(&p.y, 2, ctx);
+    let three_x = fq2_mul_constant(&p.x, 3, ctx);
+    let three_x_sq = ctx.fq2_mul(&three_x, &p.x);
+    let lambda = {
+        let tho_y_neg = ctx.fq2_neg(&two_y);
+        ctx.fq2_mul(&three_x_sq, &tho_y_neg)
+    };
+
+    let lambda_sq = ctx.fq2_square(&lambda);
+    let two_x = fq2_mul_constant(&p.x, 2, ctx);
+    let x_3 = ctx.fq2_sub(&lambda_sq, &two_x);
+
+    let dx = ctx.fq2_sub(&p.x, &x_3);
+    let lambda_dx = ctx.fq2_mul(&lambda, &dx);
+    let y_3 = ctx.fq2_sub(&lambda_dx, &p.y);
+
+    AssignedG2Affine::new(x_3, y_3, p.z)
+}
+
+pub fn g2_psi2(
+    p: &AssignedG2Affine<G1Affine, Fr>,
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
+) -> AssignedG2Affine<G1Affine, Fr> {
+    // 1 / 2 ^ ((q-1)/3)
+    let psi2_coeff_x = assign_fq2(
+        &Fp2 {
+            c0: Fq::from_raw_unchecked([
+                0xcd03c9e48671f071,
+                0x5dab22461fcda5d2,
+                0x587042afd3851b95,
+                0x8eb60ebe01bacb9e,
+                0x03f97d6e83d050d2,
+                0x18f0206554638741,
+            ]),
+            c1: Fq::zero(),
+        },
+        ctx,
+    );
+
+    let x = ctx.fq2_mul(&p.x, &psi2_coeff_x);
+    let y = ctx.fq2_neg(&p.y);
+
+    AssignedG2Affine::new(x, y, p.z)
+}
+
+pub fn get_scalar_integer_chip(
+    ctx: &mut GeneralScalarEccContext<G1Affine, Fr>,
+) -> &mut dyn IntegerChipOps<pairing::bls12_381::Fr, Fr> {
+    &mut ctx.scalar_integer_ctx
+}
+
 macro_rules! square {
     ($var:expr, $n:expr) => {
         for _ in 0..$n {
@@ -171,12 +503,8 @@ macro_rules! square {
 
 #[cfg(test)]
 mod tests {
-    use std::cell::RefCell;
-    use std::ops::Add;
-    use std::ptr::hash;
-    use std::rc::Rc;
-    use halo2_gadgets::sha256::Table16Config;
     use super::*;
+    use halo2_gadgets::sha256::Table16Config;
     use halo2_proofs::{
         arithmetic::FieldExt,
         circuit::{Layouter, SimpleFloorPlanner},
@@ -185,6 +513,10 @@ mod tests {
     };
     use halo2ecc_s::context::Context;
     use sha2::Digest;
+    use std::cell::RefCell;
+    use std::ops::Add;
+    use std::ptr::hash;
+    use std::rc::Rc;
     use subtle::Choice;
 
     const TEST_FP2: Fp2 = Fp2 {
@@ -225,15 +557,21 @@ mod tests {
 
         // let assigned = ctx.fq2_assign_constant((TEST_FP2.c0, TEST_FP2.c1));
 
-        let c0 = Fq::from_bytes(&[12, 137, 217, 106, 50, 146, 136, 72, 133, 56, 121, 4, 216, 99, 109, 128, 49, 215, 124, 34, 251, 129, 104, 217, 220, 87, 231, 148, 186, 48, 86, 200, 108, 237, 107, 183, 139, 168, 147, 15, 178, 126, 52, 33, 108, 202, 209, 100]).unwrap();
-        let c1 = Fq::from_bytes(&[17, 102, 56, 112, 107, 137, 145, 242, 44, 78, 37, 49, 225, 173, 27, 21, 207, 89, 0, 130, 77, 194, 134, 9, 38, 84, 62, 104, 4, 145, 55, 209, 95, 235, 179, 78, 44, 167, 249, 168, 32, 33, 224, 187, 18, 226, 238, 50]).unwrap();
-        let u = Fp2{
-            c0,
-            c1
-        };
+        let c0 = Fq::from_bytes(&[
+            12, 137, 217, 106, 50, 146, 136, 72, 133, 56, 121, 4, 216, 99, 109, 128, 49, 215, 124,
+            34, 251, 129, 104, 217, 220, 87, 231, 148, 186, 48, 86, 200, 108, 237, 107, 183, 139,
+            168, 147, 15, 178, 126, 52, 33, 108, 202, 209, 100,
+        ])
+        .unwrap();
+        let c1 = Fq::from_bytes(&[
+            17, 102, 56, 112, 107, 137, 145, 242, 44, 78, 37, 49, 225, 173, 27, 21, 207, 89, 0,
+            130, 77, 194, 134, 9, 38, 84, 62, 104, 4, 145, 55, 209, 95, 235, 179, 78, 44, 167, 249,
+            168, 32, 33, 224, 187, 18, 226, 238, 50,
+        ])
+        .unwrap();
+        let u = Fp2 { c0, c1 };
         let assigned = ctx.fq2_assign_constant((u.c0, u.c1));
         println!("u={:?}", assigned_fq2_to_value(&assigned));
-
 
         let asq = ctx.fq2_square(&assigned);
 
@@ -243,35 +581,9 @@ mod tests {
 
         assert_eq!(value, u.square());
     }
-
-    // #[test]
-    // fn test_g2_add() {
-    //     let ctx = Rc::new(RefCell::new(Context::new()));
-    //     let mut ctx = GeneralScalarEccContext::<G1Affine, Fr>::new(ctx);
-    //
-    //     let a = G2Affine::generator();
-    //     let b = G2Affine::generator();
-    //
-    //     let a_a = assign_g2(&mut ctx, a);
-    //     let a_b = assign_g2(&mut ctx, b);
-    //
-    //     let sum = g2_add(&a_a, &a_b, &mut ctx);
-    //
-    //     let x_v = assigned_fq2_to_value(&sum.x);
-    //     let y_v = assigned_fq2_to_value(&sum.x);
-    //
-    //     let sum_val = G2Affine{
-    //         x: x_v,
-    //         y: y_v,
-    //         infinity: Choice::from(1)
-    //     };
-    //
-    //
-    //     let sum2 = a + b;
-    //     assert_eq!(sum_val, sum2);
-    // }
 }
 
+// from https://github.com/mikelodder7/bls12_381_plus/blob/main/src/hash_to_curve/chain.rs#L328
 #[allow(clippy::cognitive_complexity)]
 /// addchain for 1001205140483106588246484290269935788605945006208159541241399033561623546780709821462541004956387089373434649096260670658193992783731681621012512651314777238193313314641988297376025498093520728838658813979860931248214124593092835
 /// Bos-Coster (win=4) : 895 links, 17 variables
@@ -812,4 +1124,3 @@ pub fn chain_p2m9div16(var0: &Fp2) -> Fp2 {
     //  893 : 1001205140483106588246484290269935788605945006208159541241399033561623546780709821462541004956387089373434649096260670658193992783731681621012512651314777238193313314641988297376025498093520728838658813979860931248214124593092835
     var1 * var2
 }
-

@@ -1,42 +1,52 @@
+use crypto_bigint::{CheckedSub, Encoding, Limb, NonZero, Pow, Uint};
+use halo2_gadgets::sha256::{AssignedBits, Table16Chip};
 use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::cmp::min;
 use std::convert::TryInto;
-use std::{fmt, iter};
 use std::ops::{Add, DerefMut, Div, Mul, MulAssign, Shl};
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::Arc;
-use crypto_bigint::{CheckedSub, Encoding, Limb, NonZero, Pow, Uint};
-use halo2_gadgets::sha256::{AssignedBits, Table16Chip};
+use std::{fmt, iter};
 
-use halo2_proofs::{arithmetic::FieldExt, circuit::{Chip, Layouter}, pairing, plonk::Error};
 use halo2_proofs::arithmetic::{BaseExt, Field};
+use halo2_proofs::{
+    arithmetic::FieldExt,
+    circuit::{Chip, Layouter},
+    pairing,
+    plonk::Error,
+};
 
+use crate::consts::*;
+use crate::sha256::Sha256;
+use crate::utils::*;
 use halo2_proofs::circuit::Region;
-use halo2_proofs::pairing::bls12_381::{Fp2, Fq, G1, G1Affine, G2Affine};
+use halo2_proofs::pairing::bls12_381::{Fp2, Fq, G1Affine, G2Affine, G1};
 use halo2_proofs::pairing::bn256::Fr;
 use halo2_proofs::pairing::group::ff::PrimeField;
-use halo2ecc_s::{circuit::{
-    base_chip::{BaseChip, BaseChipConfig, BaseChipOps},
-    range_chip::{RangeChip, RangeChipConfig, RangeChipOps},
-}, context::{Context, Records}};
-use halo2ecc_s::assign::{AssignedCondition, AssignedFq, AssignedFq2, AssignedG2Affine, AssignedInteger, AssignedValue, ValueSchema};
-use halo2ecc_s::circuit::ecc_chip::{EccBaseIntegerChipWrapper, EccChipBaseOps};
+use halo2ecc_s::assign::{
+    AssignedCondition, AssignedFq, AssignedFq2, AssignedG2Affine, AssignedInteger, AssignedPoint,
+    AssignedValue, ValueSchema,
+};
+use halo2ecc_s::circuit::ecc_chip::{EccBaseIntegerChipWrapper, EccChipBaseOps, EccChipScalarOps};
 use halo2ecc_s::circuit::fq12::Fq2ChipOps;
 use halo2ecc_s::circuit::pairing_chip::PairingChipOps;
 use halo2ecc_s::context::{GeneralScalarEccContext, IntegerContext};
 use halo2ecc_s::utils::{bn_to_field, field_to_bn};
+use halo2ecc_s::{
+    circuit::{
+        base_chip::{BaseChip, BaseChipConfig, BaseChipOps},
+        range_chip::{RangeChip, RangeChipConfig, RangeChipOps},
+    },
+    context::{Context, Records},
+};
 use itertools::Itertools;
-use milagro_bls::amcl_utils::Big;
 use num_bigint::BigUint;
-use sha2::digest::typenum::private::IsEqualPrivate;
 use num_integer::Integer;
 use num_traits::{FromPrimitive, Num, One, ToPrimitive, Zero};
+use sha2::digest::typenum::private::IsEqualPrivate;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq};
-use crate::sha256::Sha256;
-use crate::utils::*;
-use crate::consts::*;
 
 const SHA256_DIGEST_SIZE: usize = 32;
 
@@ -65,7 +75,7 @@ impl HashToCurve {
     pub fn new(ctx: Rc<RefCell<Context<Fr>>>, hash_chip: Table16Chip) -> Self {
         HashToCurve {
             main_gate: ctx,
-            hash_chip
+            hash_chip,
         }
     }
 
@@ -73,17 +83,11 @@ impl HashToCurve {
         &self,
         msg: [AssignedValue<Fr>; SHA256_DIGEST_SIZE],
         dst: impl AsRef<[u8]>,
-        mut layouter: impl Layouter<Fr>
+        mut layouter: impl Layouter<Fr>,
     ) -> Result<AssignedG2Affine<G1Affine, Fr>, Error> {
         let fields = self.hash_to_field(msg, dst, layouter)?;
 
         let point = self.map_to_g2(fields.clone())?;
-
-        let point = AssignedG2Affine::new(
-            fields[0].clone(),
-            fields[1].clone(),
-            self.main_gate.as_ref().borrow_mut().assign_bit(Fr::zero())
-        );
 
         Ok(point)
     }
@@ -92,18 +96,28 @@ impl HashToCurve {
         &self,
         msg: [AssignedValue<Fr>; SHA256_DIGEST_SIZE],
         dst: impl AsRef<[u8]>,
-        mut layouter: impl Layouter<Fr>
+        mut layouter: impl Layouter<Fr>,
     ) -> Result<[AssignedFq2<Fq, Fr>; 2], Error> {
         let main_gate = self.main_gate.clone();
 
-        let assigned_dst = dst.as_ref().iter().cloned().map(|b| main_gate.as_ref().borrow_mut().assign_constant(Fr::from(b as u64))).collect_vec();
+        let assigned_dst = dst
+            .as_ref()
+            .iter()
+            .cloned()
+            .map(|b| {
+                main_gate
+                    .as_ref()
+                    .borrow_mut()
+                    .assign_constant(Fr::from(b as u64))
+            })
+            .collect_vec();
 
         let len_in_bytes = 2 * M * L;
         let extended_msg = self.expand_message_xmd(
             msg,
             assigned_dst,
             len_in_bytes,
-            layouter.namespace(|| "expand_message_xmd")
+            layouter.namespace(|| "expand_message_xmd"),
         )?;
 
         let mut u = vec![];
@@ -116,15 +130,26 @@ impl HashToCurve {
 
             for j in 0..M {
                 let elm_offset = L * (j + i * M);
-                let tv = extended_msg[elm_offset..elm_offset + L].into_iter().rev().collect_vec();
-                // println!("len_in {} tv {:?} => {:?}", tv.len(), tv.iter().map(|e| e.val.get_lower_128()).collect_vec(), self.os2ip(tv.clone()).val);
+                let tv = extended_msg[elm_offset..elm_offset + L]
+                    .into_iter()
+                    .rev()
+                    .collect_vec();
 
-                let mut registers = iter::repeat_with(|| main_gate.as_ref().borrow_mut().assign(Fr::zero())).take(NUM_REGISTER).collect_vec();
+                let mut registers =
+                    iter::repeat_with(|| main_gate.as_ref().borrow_mut().assign(Fr::zero()))
+                        .take(NUM_REGISTER)
+                        .collect_vec();
                 let mut cur_bits = 0;
                 let mut idx = 0;
                 for k in 0..L {
                     if cur_bits + 8 <= BITS_PER_REGISTER {
-                        registers[idx] = main_gate.as_ref().borrow_mut().mul_add(&tv[k], &assigned_one, Fr::from(1 << cur_bits), &registers[idx], Fr::one());
+                        registers[idx] = main_gate.as_ref().borrow_mut().mul_add(
+                            &tv[k],
+                            &assigned_one,
+                            Fr::from(1 << cur_bits),
+                            &registers[idx],
+                            Fr::one(),
+                        );
 
                         cur_bits += 8;
 
@@ -138,11 +163,20 @@ impl HashToCurve {
 
                         let bits = self.byte_to_bits(&tv[k]);
 
-                        let remainder_1 = self.bits_to_byte(bits.iter().cloned().take(bits_1).collect_vec());
+                        let remainder_1 =
+                            self.bits_to_byte(bits.iter().cloned().take(bits_1).collect_vec());
 
-                        let remainder_2 = self.bits_to_byte(bits.iter().cloned().skip(bits_1).take(bits_2).collect_vec());
+                        let remainder_2 = self.bits_to_byte(
+                            bits.iter().cloned().skip(bits_1).take(bits_2).collect_vec(),
+                        );
 
-                        registers[idx] = main_gate.as_ref().borrow_mut().mul_add(&remainder_1, &assigned_one, Fr::from(1 << cur_bits), &registers[idx], Fr::one());
+                        registers[idx] = main_gate.as_ref().borrow_mut().mul_add(
+                            &remainder_1,
+                            &assigned_one,
+                            Fr::from(1 << cur_bits),
+                            &registers[idx],
+                            Fr::one(),
+                        );
                         registers[idx + 1] = remainder_2;
                         idx += 1;
                         cur_bits = bits_2;
@@ -154,35 +188,17 @@ impl HashToCurve {
                 let limbs = self.signed_fp_carry_modp(registers.clone());
                 e_d.push(limbs.iter().map(|e| e.val.get_lower_128()).collect_vec());
 
-                // let mut modx = BigUint::one();
-                // for i in 0..55 {
-                //     modx = modx.mul(2u32)
-                // }
-                // let mut x = BigUint::zero();
-                //
-                // let ls = limbs.iter().map(|e| e.val.get_lower_128()).collect_vec();
-                // for i in (0..ls.len()).rev() {
-                //     x = x * modx.clone() + BigUint::from(ls[i])
-                // }
-                // println!("{}", x);
-
                 let fq = {
-                    let mut ecc_ctx = GeneralScalarEccContext::<G1Affine, Fr>::new(self.main_gate.clone());
-
-                    let int_ctx = ecc_ctx.base_integer_chip();
-
-                    // println!("limb_bits={} limbs={} mask={}", int_ctx.range_chip().info().limb_bits, int_ctx.range_chip().info().limbs, int_ctx.range_chip().info().limb_mask);
+                    let mut ecc_ctx =
+                        GeneralScalarEccContext::<G1Affine, Fr>::new(self.main_gate.clone());
 
                     // warning: limbs that represent resulted fields are encoded diffrently from how halo2ecc-s does it here (https://github.com/DelphinusLab/halo2ecc-s/blob/main/src/circuit/integer_chip.rs#L205)
                     // recording shouldn't take a lot of constraints but is a integration hell so I'll cheat for now and do it in Rust and assign correct value
                     // todo: leaving this in PROD is a direct vulnerability because malicious prover can inject bad values
-                    let bn = limbs_to_biguint::<55>(limbs.iter().map(|e| e.val.get_lower_128()).collect_vec());
-                    int_ctx.assign_w(&bn)
-
-                    // let schemas = limbs.iter().zip(int_ctx.range_chip().info().limb_coeffs.clone());
-                    // let native = int_ctx
-                    //     .base_chip().sum_with_constant(schemas.collect(), None);
-                    // AssignedFq::new(limbs, native, 1)
+                    let bn = limbs_to_biguint::<55>(
+                        limbs.iter().map(|e| e.val.get_lower_128()).collect_vec(),
+                    );
+                    ecc_ctx.base_integer_chip().assign_w(&bn)
                 };
 
                 e.push(fq);
@@ -190,11 +206,9 @@ impl HashToCurve {
 
             let e: [_; 2] = e.try_into().unwrap();
             let [c0, c1] = e;
-            //println!("fq2={}", ass AssignedFq2::from((c0, c1)))
             u.push(AssignedFq2::from((c0, c1)));
             u_d.push(e_d);
         }
-
 
         Ok(u.try_into().unwrap())
     }
@@ -202,20 +216,19 @@ impl HashToCurve {
     pub fn map_to_g2(
         &self,
         fields: [AssignedFq2<Fq, Fr>; 2],
-    // ) -> Result<[[AssignedFq<Fq, Fr>; 2]; 2], Error> {
-    ) -> Result<(), Error> {
+    ) -> Result<AssignedG2Affine<G1Affine, Fr>, Error> {
         let mut ecc_ctx = GeneralScalarEccContext::<G1Affine, Fr>::new(self.main_gate.clone());
 
         let p1 = self.map_to_curve_simple_swu(&fields[0]);
         let p2 = self.map_to_curve_simple_swu(&fields[1]);
 
-        let p_sum = g2_add(&p1, &p2, &mut ecc_ctx);
+        let p_sum = g2affine_add(&p1, &p2, &mut ecc_ctx);
 
-        let res_p = self.isogeny_map_g2(&p_sum);
+        let iso_p = self.isogeny_map_g2(&p_sum);
 
-        println!("result {:?} {:?}", assigned_fq2_to_value(&res_p.x), assigned_fq2_to_value(&res_p.y));
+        let res_p = self.clear_cofactor(&iso_p);
 
-        Ok(())
+        Ok(res_p)
     }
 
     // based on draft-irtf-cfrg-hash-to-curve-16: https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-hash-to-curve-16#appendix-F.1-3
@@ -227,17 +240,12 @@ impl HashToCurve {
         &self,
         u: &AssignedFq2<Fq, Fr>,
     ) -> AssignedG2Affine<G1Affine, Fr> {
-    //     ) -> Result<AssignedG2<G1Affine, Fr>, Error> {
-        //     // ) -> Result<AssignedG2Affine<G1Affine, Fr>, Error> {
-        //     // ) -> Result<(), Error> {
-    // ) -> Result<(), Error> {
         let mut ecc_ctx = GeneralScalarEccContext::<G1Affine, Fr>::new(self.main_gate.clone());
 
         let A = ecc_ctx.fq2_assign_constant((SWU_A.c0, SWU_A.c1));
         let B = ecc_ctx.fq2_assign_constant((SWU_B.c0, SWU_B.c1));
         let Z = ecc_ctx.fq2_assign_constant((SWU_Z.c0, SWU_Z.c1));
         let one = ecc_ctx.fq2_assign_one();
-
 
         let usq = ecc_ctx.fq2_square(u); // 1.  tv1 = u^2
         let z_usq = ecc_ctx.fq2_mul(&usq, &Z); // 2.  tv1 = Z * tv1
@@ -302,9 +310,11 @@ impl HashToCurve {
 
             let mut is_gx1_square = Choice::from(0);
 
-            let gx1_num = gx0_num_v * assigned_fq2_to_value(&z_usq) * assigned_fq2_to_value(&zsq_u4);
+            let gx1_num =
+                gx0_num_v * assigned_fq2_to_value(&z_usq) * assigned_fq2_to_value(&zsq_u4);
             // compute g(x1(u)) * u^3
-            let sqrt_candidate = sqrt_candidate * assigned_fq2_to_value(&usq) * assigned_fq2_to_value(&u);
+            let sqrt_candidate =
+                sqrt_candidate * assigned_fq2_to_value(&usq) * assigned_fq2_to_value(&u);
             for eta in &SWU_ETAS[..] {
                 let tmp = sqrt_candidate * eta;
                 let found = (tmp.square() * gx_den_v).ct_eq(&gx1_num);
@@ -315,7 +325,11 @@ impl HashToCurve {
             // one of gX0 or gX1 must be a square!
             assert!(is_gx0_square.unwrap_u8() == 1 || is_gx1_square.unwrap_u8() == 1);
 
-            let is_gx1_square = self.main_gate.as_ref().borrow_mut().assign_bit(Fr::from(is_gx1_square.unwrap_u8() as u64));
+            let is_gx1_square = self
+                .main_gate
+                .as_ref()
+                .borrow_mut()
+                .assign_bit(Fr::from(is_gx1_square.unwrap_u8() as u64));
 
             (is_gx1_square, y)
         };
@@ -323,7 +337,6 @@ impl HashToCurve {
         let x = ecc_ctx.fq2_mul(&z_usq, &x0_num); // 17.  x = tv1 * tv3
         let x = fq2_bisec(&is_gx1_square, &x, &x0_num, &mut ecc_ctx); // 21.  x = CMOV(x, tv3, is_gx1_square)
         let y = assign_fq2(&y_val, &mut ecc_ctx);
-
 
         let u_sgn = is_fq2_sgn0(&u, &mut ecc_ctx);
         let y_sgn = is_fq2_sgn0(&y, &mut ecc_ctx);
@@ -339,21 +352,10 @@ impl HashToCurve {
             ecc_ctx.fq2_mul(&x, &x_den_inv)
         };
 
-        // let y = ecc_ctx.fq2_mul(&tv1, u); // 19.  y = tv1 * u  -> Z * u^3 * y1
-        // let y = ecc_ctx.fq2_mul(&y, &y1); // 20.  y = y * y1
-        // let y = fq2_bisec(&is_sqrt, &y1, &y, &mut ecc_ctx); // 22.  y = CMOV(y, y1, is_gx1_square)
-
-        // let e1: AssignedCondition<Fr> { }; // 23.  e1 = sgn0(u) == sgn0(y)
-        // let y = {
-        //     let y_neg = ecc_ctx.fq2_neg(&y);
-        //     fq2_bisec(&e1, &y, &y_neg, &mut ecc_ctx)
-        // };// 24.   y = CMOV(-y, y, e1)
-        //
-        // let x: AssignedFq2<Fq, Fr> = {}; // 25.   x = x / tv4
-        //
-        // Ok([x, y])
-
-        let is_inf = ecc_ctx.base_integer_chip().base_chip().assign_bit(Fr::one());
+        let is_inf = ecc_ctx
+            .base_integer_chip()
+            .base_chip()
+            .assign_bit(Fr::zero());
         AssignedG2Affine::new(x, y, is_inf)
     }
 
@@ -368,8 +370,17 @@ impl HashToCurve {
     ) -> AssignedG2Affine<G1Affine, Fr> {
         let mut ecc_ctx = GeneralScalarEccContext::<G1Affine, Fr>::new(self.main_gate.clone());
 
-        let coeffs = [ISO_XNUM.to_vec(), ISO_XDEN.to_vec(), ISO_YNUM.to_vec(), ISO_YDEN.to_vec()].map(|coeffs| {
-            coeffs.into_iter().map(|c| ecc_ctx.fq2_assign_constant((c.c0, c.c1))).collect_vec()
+        let coeffs = [
+            ISO_XNUM.to_vec(),
+            ISO_XDEN.to_vec(),
+            ISO_YNUM.to_vec(),
+            ISO_YDEN.to_vec(),
+        ]
+        .map(|coeffs| {
+            coeffs
+                .into_iter()
+                .map(|c| ecc_ctx.fq2_assign_constant((c.c0, c.c1)))
+                .collect_vec()
         });
 
         let [x_num, x_den, y_num, y_den] = coeffs.map(|coeffs| {
@@ -379,7 +390,6 @@ impl HashToCurve {
                 ecc_ctx.fq2_add(&acc, &v)
             })
         });
-
 
         let x = {
             let x_den_inv = ecc_ctx.fq2_unsafe_invert(&x_den);
@@ -395,20 +405,79 @@ impl HashToCurve {
         AssignedG2Affine::new(x, y, p.z)
     }
 
+    pub fn clear_cofactor(
+        &self,
+        p: &AssignedG2Affine<G1Affine, Fr>,
+    ) -> AssignedG2Affine<G1Affine, Fr> {
+        let mut ecc_ctx = GeneralScalarEccContext::<G1Affine, Fr>::new(self.main_gate.clone());
+
+        // NOTE: in BLS12-381 we can just skip the first bit.
+        let x = BLS_X; // BLS_X >> 1;
+        let p_g2 = ecc_ctx.g2affine_to_g2(&p);
+
+        let t1 = {
+            let tv = g2_mul_x(&p_g2, x, &mut ecc_ctx);
+            g2_neg(&tv, &mut ecc_ctx)
+        }; // [-x]P
+
+        let t2 = g2_psi(&p_g2, &mut ecc_ctx); // Ψ(P)
+
+        let t3 = g2_double(&p_g2, &mut ecc_ctx); // 2P
+
+        let t2_aff = g2_to_affine(&t2, &mut ecc_ctx);
+        let t3 = g2_to_affine(&t3, &mut ecc_ctx);
+        let t3 = g2_psi2(&t3, &mut ecc_ctx); // Ψ²(2P)
+
+        let t3 = g2_sub(&t3, &t2_aff, &mut ecc_ctx); // Ψ²(2P) - Ψ(P)
+
+        let t2 = g2_add(&t1, &t2, &mut ecc_ctx); // [-x]P + Ψ(P)
+        let t2 = {
+            let tv = g2_mul_x(&t2, x, &mut ecc_ctx);
+            g2_neg(&tv, &mut ecc_ctx)
+        }; // [x²]P - [x]Ψ(P)
+        let t2 = g2_to_affine(&t2, &mut ecc_ctx);
+
+        let t1 = g2_to_affine(&t1, &mut ecc_ctx);
+        let t3 = g2affine_add(&t3, &t2, &mut ecc_ctx); // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P)
+        let t3 = g2_sub(&t3, &t1, &mut ecc_ctx); // Ψ²(2P) - Ψ(Plet ) + [x²]P - [x]Ψ(P) + [x]P
+
+        let res = g2_sub(&t3, &p, &mut ecc_ctx); // Ψ²(2P) - Ψ(P) + [x²]P - [x]Ψ(P) + [x]P - 1P =>
+
+        res // [x²-x-1]P + [x-1]Ψ(P) + Ψ²(2P)
+    }
+
     pub fn expand_message_xmd(
         &self,
         msg: [AssignedValue<Fr>; SHA256_DIGEST_SIZE],
         mut dst: Vec<AssignedValue<Fr>>,
         len_in_bytes: usize,
-        mut layouter: impl Layouter<Fr>
+        mut layouter: impl Layouter<Fr>,
     ) -> Result<Vec<AssignedValue<Fr>>, Error> {
         let mut main_gate = self.main_gate();
 
-        dst.push(main_gate.as_ref().borrow_mut().assign_constant(Fr::from(dst.len().to_le_bytes()[0] as u64)));
+        dst.push(
+            main_gate
+                .as_ref()
+                .borrow_mut()
+                .assign_constant(Fr::from(dst.len().to_le_bytes()[0] as u64)),
+        );
 
-        let z_pad = iter::repeat_with(|| main_gate.as_ref().borrow_mut().assign_constant(Fr::zero())).take(63).collect_vec();
+        let z_pad =
+            iter::repeat_with(|| main_gate.as_ref().borrow_mut().assign_constant(Fr::zero()))
+                .take(63)
+                .collect_vec();
 
-        let l_i_b_str = len_in_bytes.to_le_bytes().into_iter().take(3).map(|b| main_gate.as_ref().borrow_mut().assign_constant(Fr::from(b as u64))).collect_vec();
+        let l_i_b_str = len_in_bytes
+            .to_le_bytes()
+            .into_iter()
+            .take(3)
+            .map(|b| {
+                main_gate
+                    .as_ref()
+                    .borrow_mut()
+                    .assign_constant(Fr::from(b as u64))
+            })
+            .collect_vec();
 
         let ell = len_in_bytes.div_ceil(SHA256_DIGEST_SIZE);
 
@@ -416,27 +485,59 @@ impl HashToCurve {
             .into_iter()
             .chain(msg)
             .chain(l_i_b_str)
-            .chain(iter::once(main_gate.as_ref().borrow_mut().assign_constant(Fr::zero())))
+            .chain(iter::once(
+                main_gate.as_ref().borrow_mut().assign_constant(Fr::zero()),
+            ))
             .chain(dst.clone())
             .collect_vec();
 
         let mut b = vec![];
-        let b_0 = Sha256::digest(self.hash_chip(), self.main_gate(), layouter.namespace(|| "sha256_0"), s256s_0_input)?;
+        let b_0 = Sha256::digest(
+            self.hash_chip(),
+            self.main_gate(),
+            layouter.namespace(|| "sha256_0"),
+            s256s_0_input,
+        )?;
 
-        let s256s_1_input = b_0.into_iter()
-            .chain(iter::once(main_gate.as_ref().borrow_mut().assign_constant(Fr::one())))
+        let s256s_1_input = b_0
+            .into_iter()
+            .chain(iter::once(
+                main_gate.as_ref().borrow_mut().assign_constant(Fr::one()),
+            ))
             .chain(dst.clone())
             .collect_vec();
 
-        b.push(Sha256::digest(self.hash_chip(), self.main_gate(), layouter.namespace(|| "sha256_1"), s256s_1_input)?.to_vec());
+        b.push(
+            Sha256::digest(
+                self.hash_chip(),
+                self.main_gate(),
+                layouter.namespace(|| "sha256_1"),
+                s256s_1_input,
+            )?
+            .to_vec(),
+        );
         for i in 1..ell {
-            let sha256_i_input = self.array_xor(b_0, b[i - 1].clone())
+            let sha256_i_input = self
+                .array_xor(b_0, b[i - 1].clone())
                 .into_iter()
-                .chain(iter::once(main_gate.as_ref().borrow_mut().assign_constant(Fr::from(i as u64 + 1))))
+                .chain(iter::once(
+                    main_gate
+                        .as_ref()
+                        .borrow_mut()
+                        .assign_constant(Fr::from(i as u64 + 1)),
+                ))
                 .chain(dst.clone())
                 .collect_vec();
 
-            b.push(Sha256::digest(self.hash_chip(), self.main_gate(), layouter.namespace(|| format!("sha256_{}", i)), sha256_i_input)?.to_vec());
+            b.push(
+                Sha256::digest(
+                    self.hash_chip(),
+                    self.main_gate(),
+                    layouter.namespace(|| format!("sha256_{}", i)),
+                    sha256_i_input,
+                )?
+                .to_vec(),
+            );
         }
 
         Ok(b.into_iter().flatten().take(len_in_bytes).collect_vec())
@@ -450,21 +551,30 @@ impl HashToCurve {
         self.main_gate.clone()
     }
 
-    pub fn array_xor(&self, a: impl AsRef<[AssignedValue<Fr>]>, b: impl AsRef<[AssignedValue<Fr>]>) -> Vec<AssignedValue<Fr>> {
-        a.as_ref().into_iter().zip(b.as_ref()).map(|(a, b)| {
-            self.bits_to_byte(self.byte_to_bits(a).into_iter().zip(self.byte_to_bits(b)).map(
-                |(a_b, b_b)| self.main_gate.as_ref().borrow_mut().xor(
-                    &a_b, &b_b
+    pub fn array_xor(
+        &self,
+        a: impl AsRef<[AssignedValue<Fr>]>,
+        b: impl AsRef<[AssignedValue<Fr>]>,
+    ) -> Vec<AssignedValue<Fr>> {
+        a.as_ref()
+            .into_iter()
+            .zip(b.as_ref())
+            .map(|(a, b)| {
+                self.bits_to_byte(
+                    self.byte_to_bits(a)
+                        .into_iter()
+                        .zip(self.byte_to_bits(b))
+                        .map(|(a_b, b_b)| self.main_gate.as_ref().borrow_mut().xor(&a_b, &b_b))
+                        .collect_vec(),
                 )
-            ).collect_vec())
-        }).collect_vec()
+            })
+            .collect_vec()
     }
 
     pub fn os2ip(&self, bytes: Vec<AssignedValue<Fr>>) -> AssignedValue<Fr> {
         let mut main_gate = self.main_gate.as_ref().borrow_mut();
         let mut result = main_gate.assign_constant(Fr::zero());
         let assigned_one = main_gate.assign_constant(Fr::from(256));
-
 
         for b in bytes {
             result = main_gate.mul_add(&result, &assigned_one, Fr::one(), &b, Fr::one());
@@ -484,7 +594,11 @@ impl HashToCurve {
         let mut rest = n.clone();
 
         for i in 0..8 {
-            let b = self.main_gate.as_ref().borrow_mut().assign_bit(v.bit(i).into());
+            let b = self
+                .main_gate
+                .as_ref()
+                .borrow_mut()
+                .assign_bit(v.bit(i).into());
             // let v = (rest.val - b.0.val) * two_inv;
             // rest = self.main_gate
             //     .as_ref()
@@ -538,20 +652,56 @@ impl HashToCurve {
         // let t = &pow2nk * pow2n.clone().div(p.clone());
         // r[1] = Uint::<7>::from_be_slice(&t.to_bytes_be()).to_limbs().into_iter().map(|e| e.0.to_u128().unwrap()).collect_vec();
         // r[2] = Uint::<7>::from_be_slice(&(t * pow2n).div(p).to_bytes_be()).to_limbs().into_iter().map(|e| e.0.to_u128().unwrap()).collect_vec();
-        // println!("{:?}", r);
 
         let mut r = [
-            [Fr::from(5348024557917519), Fr::from(54621380807268), Fr::from(15414564296778992), Fr::from(29551429513052912), Fr::from(9781498950865438), Fr::from(22955184228343852), Fr::from(1261049230581880)],
-            [Fr::from(30938049114109417), Fr::from(25069422147581717), Fr::from(28307001734588567), Fr::from(22392818961866772), Fr::from(2511700624859367), Fr::from(31094434456506070), Fr::from(1473601367038320)],
-            [Fr::from(14446664148595727), Fr::from(10904152646835916), Fr::from(10624676166198448), Fr::from(32578590057284104), Fr::from(30830349559713612), Fr::from(15030327468622177), Fr::from(665335521685653)],
+            [
+                Fr::from(5348024557917519),
+                Fr::from(54621380807268),
+                Fr::from(15414564296778992),
+                Fr::from(29551429513052912),
+                Fr::from(9781498950865438),
+                Fr::from(22955184228343852),
+                Fr::from(1261049230581880),
+            ],
+            [
+                Fr::from(30938049114109417),
+                Fr::from(25069422147581717),
+                Fr::from(28307001734588567),
+                Fr::from(22392818961866772),
+                Fr::from(2511700624859367),
+                Fr::from(31094434456506070),
+                Fr::from(1473601367038320),
+            ],
+            [
+                Fr::from(14446664148595727),
+                Fr::from(10904152646835916),
+                Fr::from(10624676166198448),
+                Fr::from(32578590057284104),
+                Fr::from(30830349559713612),
+                Fr::from(15030327468622177),
+                Fr::from(665335521685653),
+            ],
         ];
 
-        let mut out_sum = bns.iter().map(|e| self.main_gate.as_ref().borrow_mut().assign(e.val)).collect_vec();
-        let mut assigned_one = self.main_gate.as_ref().borrow_mut().assign_constant(Fr::one());
+        let mut out_sum = bns
+            .iter()
+            .map(|e| self.main_gate.as_ref().borrow_mut().assign(e.val))
+            .collect_vec();
+        let mut assigned_one = self
+            .main_gate
+            .as_ref()
+            .borrow_mut()
+            .assign_constant(Fr::one());
 
         for i in 0..m {
             for j in 0..k {
-                out_sum[j] = self.main_gate.as_ref().borrow_mut().mul_add(&bns[i+k], &assigned_one, r[i][j], &out_sum[j], Fr::one())
+                out_sum[j] = self.main_gate.as_ref().borrow_mut().mul_add(
+                    &bns[i + k],
+                    &assigned_one,
+                    r[i][j],
+                    &out_sum[j],
+                    Fr::one(),
+                )
             }
         }
 
@@ -564,29 +714,26 @@ impl HashToCurve {
         let k = 7;
         let n = BITS_PER_REGISTER;
 
-        let limbs_bns = limbs.into_iter().map(|e| e.val.get_lower_128()).collect_vec();
+        let limbs_bns = limbs
+            .into_iter()
+            .map(|e| e.val.get_lower_128())
+            .collect_vec();
 
-        let p = [35747322042231467,
+        let p = [
+            35747322042231467,
             36025922209447795,
             1084959616957103,
             7925923977987733,
             16551456537884751,
             23443114579904617,
-            1829881462546425];
+            1829881462546425,
+        ];
 
         let mut a = Self::signed_long_to_short(55, 7, limbs_bns);
         a.resize(10, 0);
 
-        // println!("a {:?}", a);
-        //println!("p {:?}", p);
-
-        // let rem = a.wrapping_rem(&p);
-        //
-        // println!("reduced {:?}", rem.to_words());
-
-
         let mut remainder = a.clone();
-        let mut dividend = vec![0; k+1];
+        let mut dividend = vec![0; k + 1];
         let mut quotient = vec![0; k];
 
         for i in (0..=m).rev() {
@@ -600,45 +747,49 @@ impl HashToCurve {
                 }
             }
 
-            // println!("dividend {:?}", dividend);
-
             quotient[i] = {
                 let scale = (1 << n) / (1 + p[k - 1]);
-                let norm_a = Self::long_scalar_mult::<8>(n, scale, &dividend.clone().try_into().unwrap());
+                let norm_a =
+                    Self::long_scalar_mult::<8>(n, scale, &dividend.clone().try_into().unwrap());
                 let norm_p = Self::long_scalar_mult::<7>(n, scale, &p);
 
-                // println!("norm_a {:?} norm_p {:?}", norm_a, norm_p);
-
                 if norm_p[k] != 0 {
-                    Self::short_div_norm::<8>(n, k+1, &norm_a, &norm_p)
+                    Self::short_div_norm::<8>(n, k + 1, &norm_a, &norm_p)
                 } else {
                     Self::short_div_norm::<8>(n, k, &norm_a, &norm_p)
                 }
             };
 
-            // println!("short_div {}", quotient[i]);
-
             let mult_shift = Self::long_scalar_mult_big::<7>(n, quotient[i], &p);
-            // println!("mult_shift {:?}", mult_shift);
 
-            let mut subtrahend = vec![0; m+k];
+            let mut subtrahend = vec![0; m + k];
 
             for j in 0..k {
-                subtrahend[i+j] = mult_shift[j]
+                subtrahend[i + j] = mult_shift[j]
             }
 
-            // println!("remainder {:?}", remainder);
-            remainder = Self::long_sub::<10>(n, k + m, &remainder.try_into().unwrap(), &subtrahend.try_into().unwrap()).to_vec();
+            remainder = Self::long_sub::<10>(
+                n,
+                k + m,
+                &remainder.try_into().unwrap(),
+                &subtrahend.try_into().unwrap(),
+            )
+            .to_vec();
         }
 
-        // println!("reduced {:?}", remainder);
-
-        remainder.into_iter().take(k).map(|rem| self.main_gate.as_ref().borrow_mut().assign(Fr::from(rem))).collect_vec()
+        remainder
+            .into_iter()
+            .take(k)
+            .map(|rem| self.main_gate.as_ref().borrow_mut().assign(Fr::from(rem)))
+            .collect_vec()
     }
 
     fn signed_long_to_short_2(n: usize, k: usize, a: Vec<u128>) -> Vec<u128> {
-
-        let mut temp = a.iter().cloned().map(|e| i128::from_u128(e).unwrap()).collect_vec();
+        let mut temp = a
+            .iter()
+            .cloned()
+            .map(|e| i128::from_u128(e).unwrap())
+            .collect_vec();
         (temp.len()..9).for_each(|_| temp.push(0));
         let x = 1 << n;
         let mut out = vec![];
@@ -646,11 +797,11 @@ impl HashToCurve {
         for i in 0..8 {
             if temp[i] >= 0 {
                 out.push(u128::from_i128(temp[i] % x).unwrap());
-                temp[i+1] += temp[i] / x;
+                temp[i + 1] += temp[i] / x;
             } else {
                 let borrow = (-temp[i] + x - 1) / x;
                 out.push(u128::from_i128(temp[i] + borrow * x).unwrap());
-                temp[i+1] -= borrow;
+                temp[i + 1] -= borrow;
             }
         }
 
@@ -658,7 +809,11 @@ impl HashToCurve {
     }
 
     fn signed_long_to_short(n: usize, k: usize, a: Vec<u128>) -> Vec<u64> {
-        let mut temp = a.iter().cloned().map(|e| i128::from_u128(e).unwrap()).collect_vec();
+        let mut temp = a
+            .iter()
+            .cloned()
+            .map(|e| i128::from_u128(e).unwrap())
+            .collect_vec();
         (temp.len()..9).for_each(|_| temp.push(0));
         let x = 1 << n;
         let mut out = vec![];
@@ -666,19 +821,19 @@ impl HashToCurve {
         for i in 0..8 {
             if temp[i] >= 0 {
                 out.push(u64::from_i128(temp[i] % x).unwrap());
-                temp[i+1] += temp[i] / x;
+                temp[i + 1] += temp[i] / x;
             } else {
                 let borrow = (-temp[i] + x - 1) / x;
                 out.push(u64::from_i128(temp[i] + borrow * x).unwrap());
-                temp[i+1] -= borrow;
+                temp[i + 1] -= borrow;
             }
         }
 
         out
     }
 
-    fn long_scalar_mult<const K: usize>(n: usize, a: u64, b: &[u64; K]) -> [u64; {K+1}] {
-        let mut out = [0; K+1];
+    fn long_scalar_mult<const K: usize>(n: usize, a: u64, b: &[u64; K]) -> [u64; { K + 1 }] {
+        let mut out = [0; K + 1];
 
         for i in 0..K {
             let temp = out[i] + (a * b[i]);
@@ -689,36 +844,37 @@ impl HashToCurve {
         out
     }
 
-    fn long_scalar_mult_big<const K: usize>(n: usize, a: u64, b: &[u64; K]) -> [u64; {K+1}] {
-        let mut out = [0; K+1];
+    fn long_scalar_mult_big<const K: usize>(n: usize, a: u64, b: &[u64; K]) -> [u64; { K + 1 }] {
+        let mut out = [0; K + 1];
 
         for i in 0..K {
             let temp = out[i] + (a as u128 * b[i] as u128);
             out[i] = temp % (1u128 << n);
             out[i + 1] = out[i + 1] + temp / (1u128 << n);
-            // println!("long_scalar_mult {} {} {} {}", b[i], temp, out[i], out[i + 1]);
         }
 
         out.map(|e| e as u64)
     }
 
-    fn short_div_norm<const K: usize>(n: usize, k: usize, a: &[u64; {K+1}], b: &[u64; K]) -> u64 {
+    fn short_div_norm<const K: usize>(
+        n: usize,
+        k: usize,
+        a: &[u64; { K + 1 }],
+        b: &[u64; K],
+    ) -> u64 {
         let qhat = (a[k] as u128 * (1u128 << n) + a[k - 1] as u128) / b[k - 1] as u128;
-        // println!("qhat calc k {k} {} * {} + {} = {} \\ {} = {}", a[k], (1u128 << n), a[k - 1] as u128, (a[k]as u128 * (1u128 << n) + a[k - 1]as u128), b[k - 1], qhat as u64);
         let qhat = qhat as u64;
 
         let mut mult = Self::long_scalar_mult_big::<K>(n, qhat, &b);
 
-        if Self::long_gt(k+1, &mult, &a) {
-            // println!("long_gt qhat {} mult {:?}", qhat, mult);
-            mult = Self::long_sub(n, k+1, &mult, &a);
-            if Self::long_gt(k+1, &mult, &a) {
+        if Self::long_gt(k + 1, &mult, &a) {
+            mult = Self::long_sub(n, k + 1, &mult, &a);
+            if Self::long_gt(k + 1, &mult, &a) {
                 qhat - 2
             } else {
                 qhat - 1
             }
         } else {
-            // println!("not long_gt qhat {}", qhat);
             qhat
         }
     }
@@ -765,19 +921,22 @@ impl HashToCurve {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use std::ptr::hash;
-    use halo2_gadgets::sha256::Table16Config;
     use super::*;
+    use halo2_gadgets::sha256::Table16Config;
+    use halo2_proofs::pairing::bn256::Bn256;
     use halo2_proofs::{
         arithmetic::FieldExt,
         circuit::{Layouter, SimpleFloorPlanner},
         dev::MockProver,
         plonk::{Advice, Circuit, Column, ConstraintSystem, Error},
     };
+    use crate::aggregation::run_circuit_unsafe_full_pass;
     use sha2::Digest;
+    use std::path::Path;
+    use std::ptr::hash;
+    use halo2aggregator_s::circuits::utils::TranscriptHash;
 
     const DST: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
 
@@ -786,7 +945,7 @@ mod tests {
         struct MyCircuit {}
 
         impl Circuit<Fr> for MyCircuit {
-            type Config = (BaseChipConfig, Table16Config);
+            type Config = (BaseChipConfig, RangeChipConfig, Table16Config);
             type FloorPlanner = SimpleFloorPlanner;
 
             fn without_witnesses(&self) -> Self {
@@ -794,7 +953,11 @@ mod tests {
             }
 
             fn configure(meta: &mut ConstraintSystem<Fr>) -> Self::Config {
-                (BaseChip::configure(meta), Table16Chip::configure(meta))
+                (
+                    BaseChip::configure(meta),
+                    RangeChip::configure(meta),
+                    Table16Chip::configure(meta),
+                )
             }
 
             fn synthesize(
@@ -803,9 +966,12 @@ mod tests {
                 mut layouter: impl Layouter<Fr>,
             ) -> Result<(), Error> {
                 let base_chip = BaseChip::<Fr>::new(config.0.clone());
-                let hash_chip = Table16Chip::construct(config.1.clone());
+                let range_chip = RangeChip::<Fr>::new(config.1.clone());
+                let hash_chip = Table16Chip::construct(config.2.clone());
 
-                Table16Chip::load(config.1.clone(), &mut layouter)?;
+                range_chip.init_table(&mut layouter)?;
+
+                Table16Chip::load(config.2.clone(), &mut layouter)?;
 
                 let ctx = Rc::new(RefCell::new(Context::new()));
 
@@ -815,16 +981,21 @@ mod tests {
 
                 let assigned_input = input.map(|i| ctx.as_ref().borrow_mut().assign(Fr::from(i)));
 
-                let g2 = hash2curve.hash_to_g2(assigned_input, DST, layouter.namespace(|| "hash_to_g2")).unwrap();
+                let g2 = hash2curve
+                    .hash_to_g2(assigned_input, DST, layouter.namespace(|| "hash_to_g2"))
+                    .unwrap();
 
                 drop(hash2curve);
 
-                let records = Arc::try_unwrap(Rc::try_unwrap(ctx).unwrap().into_inner().records).unwrap().into_inner().unwrap();
+                let records = Arc::try_unwrap(Rc::try_unwrap(ctx).unwrap().into_inner().records)
+                    .unwrap()
+                    .into_inner()
+                    .unwrap();
 
                 layouter.assign_region(
                     || "assign",
                     |mut region| {
-                        records.assign_all_in_base(&mut region, &base_chip)?;
+                        records.assign_all(&mut region, &base_chip, &range_chip)?;
                         Ok(())
                     },
                 )?;
@@ -834,10 +1005,25 @@ mod tests {
         }
 
         let circuit = MyCircuit {};
-        let prover = match MockProver::<Fr>::run(17, &circuit, vec![]) {
-            Ok(prover) => prover,
-            Err(e) => panic!("{:?}", e),
-        };
-        prover.verify().unwrap()
+
+        let path = Path::new("./build");
+
+        run_circuit_unsafe_full_pass::<Bn256, _>(
+            path,
+            "hash-to-curve",
+            20,
+            vec![circuit],
+            vec![vec![]],
+            TranscriptHash::Sha,
+            vec![],
+            true,
+        );
+
+        // let circuit = MyCircuit {};
+        // let prover = match MockProver::<Fr>::run(20, &circuit, vec![]) {
+        //     Ok(prover) => prover,
+        //     Err(e) => panic!("{:?}", e),
+        // };
+        // prover.verify().unwrap()
     }
 }

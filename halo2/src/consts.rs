@@ -1,5 +1,7 @@
 use halo2_proofs::pairing::bls12_381::{Fp2, Fq};
 
+pub const BLS_X: u64 = 0xd201_0000_0001_0000;
+
 pub const SWU_A: Fp2 = Fp2 {
     c0: Fq::zero(),
     c1: Fq::from_raw_unchecked([
@@ -144,7 +146,6 @@ pub const SWU_ETAS: [Fp2; 4] = [
     },
 ];
 
-
 /// Coefficients of the 3-isogeny x map's numerator
 pub const ISO_XNUM: [Fp2; 4] = [
     Fp2 {
@@ -204,7 +205,7 @@ pub const ISO_XNUM: [Fp2; 4] = [
             0xc545_16ac_c8d0_37f6,
             0x1380_8f55_0920_ea41,
         ]),
-    }
+    },
 ];
 
 /// Coefficients of the 3-isogeny x map's denominator
