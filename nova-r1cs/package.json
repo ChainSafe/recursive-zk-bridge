@@ -21,7 +21,7 @@
     "@lodestar/light-client": "^0.40.0",
     "@lodestar/types": "^0.40.0",
     "@noble/bls12-381": "^1.2.0",
-    "@noble/curves": "file:../../../examples/noble-curves",
+    "@noble/curves": "^0.8.3",
     "@types/node": "^18.0.4",
     "circom_tester": "^0.0.14",
     "ts-node": "^10.9.1",
@@ -30,6 +30,5 @@
   },
   "devDependencies": {
     "chai": "4.3.7"
-  },
-  "type": "module"
+  }
 }

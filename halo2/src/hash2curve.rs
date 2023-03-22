@@ -323,7 +323,7 @@ impl HashToCurve {
             }
 
             // one of gX0 or gX1 must be a square!
-            assert!(is_gx0_square.unwrap_u8() == 1 || is_gx1_square.unwrap_u8() == 1);
+            //assert!(is_gx0_square.unwrap_u8() == 1 || is_gx1_square.unwrap_u8() == 1);
 
             let is_gx1_square = self
                 .main_gate

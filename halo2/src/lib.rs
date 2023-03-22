@@ -12,6 +12,5 @@ mod hash2curve;
 mod sha256;
 mod utils;
 
-fn main() {
+pub use circuit::*;
 
-}

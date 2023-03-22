@@ -422,7 +422,6 @@ template HashToField(msg_len, count) {
     for (var j = 0; j < m; j++) {
       for (var k = 0; k < 7; k++) {
         result[i][j][k] <== modders[i][j].out[k];
-        log("result", i, j, k, result[i][j][k]);
       }
     }
   }

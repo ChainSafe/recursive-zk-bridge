@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crate::circuit::{circuit_with_input, circuit_with_random_input, SCRotationStepCircuit};
-use halo2_proofs::pairing::bn256::{Bn256, Fr};
+use halo2_proofs::pairing::bn256::{Bn256, Fr, G1Affine};
 use halo2aggregator_s::circuits::samples::simple::SimpleCircuit;
 use halo2aggregator_s::circuits::utils::{load_or_build_unsafe_params, load_or_build_vkey, load_or_create_proof, store_instance, TranscriptHash};
 use halo2ecc_s::context::Context;
@@ -10,7 +10,7 @@ use std::sync::Arc;
 use ark_std::{end_timer, start_timer};
 use halo2_proofs::arithmetic::MultiMillerLoop;
 use halo2_proofs::dev::MockProver;
-use halo2_proofs::plonk::{Circuit, SingleVerifier, verify_proof};
+use halo2_proofs::plonk::{Circuit, SingleVerifier, verify_proof, VerifyingKey};
 use halo2_proofs::poly::commitment::ParamsVerifier;
 use halo2_proofs::transcript::Blake2bRead;
 use halo2aggregator_s::{circuit_verifier, native_verifier};
@@ -27,8 +27,7 @@ fn test_one_layer_recursion_circuit() {
 
     let path = Path::new(path);
 
-    let circuit = circuit_with_input("../input.json");
-    let instances = vec![];
+    let (circuit, instances) = circuit_with_input("../input.json")[0].clone();
 
     let (circuit, instances) = run_circuit_unsafe_full_pass::<Bn256, _>(
         path,
@@ -42,16 +41,56 @@ fn test_one_layer_recursion_circuit() {
     )
     .unwrap();
 
-    // run_circuit_unsafe_full_pass::<Bn256, _>(
-    //     path,
-    //     "verify-circuit",
-    //     22,
-    //     vec![circuit],
-    //     vec![vec![instances]],
-    //     TranscriptHash::Blake2b,
-    //     vec![],
-    //     true,
-    // );
+    run_circuit_unsafe_full_pass::<Bn256, _>(
+        path,
+        "verify-circuit",
+        22,
+        vec![circuit],
+        vec![vec![instances]],
+        TranscriptHash::Blake2b,
+        vec![],
+        true,
+    );
+}
+
+#[test]
+fn test_proof_aggregation_circuit() {
+    let path = "./build";
+    DirBuilder::new().recursive(true).create(path).unwrap();
+
+    let path = Path::new(path);
+
+    let step_circuits = circuit_with_input("../input.json");
+
+    let mut circuits = vec![];
+    let mut instances = vec![];
+    for (step_circuit, step_instances) in step_circuits {
+        circuits.push(step_circuit);
+        instances.push(step_instances);
+    }
+
+    let (circuit, instances) = run_circuit_unsafe_full_pass::<Bn256, _>(
+        path,
+        "step-circuit",
+        20,
+        circuits,
+        instances,
+        TranscriptHash::Poseidon,
+        vec![],
+        true,
+    )
+        .unwrap();
+
+    run_circuit_unsafe_full_pass::<Bn256, _>(
+        path,
+        "verify-circuit",
+        23,
+        vec![circuit],
+        vec![vec![instances]],
+        TranscriptHash::Blake2b,
+        vec![],
+        true,
+    );
 }
 
 
@@ -64,19 +103,21 @@ pub fn run_circuit_unsafe_full_pass<E: MultiMillerLoop, C: Circuit<E::Scalar>>(
     hash: TranscriptHash,
     commitment_check: Vec<[usize; 4]>,
     force_create_proof: bool,
+    // vkey_map: &mut HashMap<String, VerifyingKey<E::G1Affine>>
 ) -> Option<(AggregatorCircuit<E::G1Affine>, Vec<E::Scalar>)> {
     // 1. setup params
     let params =
         load_or_build_unsafe_params::<E>(k, Some(&cache_folder.join(format!("K{}.params", k))));
 
-    let mut proofs = vec![];
     let mut vkey_map = HashMap::new();
+    let mut proofs = vec![];
+
     for (i, circuit) in circuits.into_iter().enumerate() {
         // 2. setup vkey
         let vkey = load_or_build_vkey::<E, C>(
             &params,
             &circuit,
-            Some(&cache_folder.join(format!("{}.{}.vkey.data", prefix, i))),
+            None, //Some(&cache_folder.join(format!("{}.{}.vkey.data", prefix, i))),
         );
 
         vkey_map.insert(format!("{}.{}.vkey.data", prefix, i), vkey.clone());
@@ -152,25 +193,6 @@ pub fn run_circuit_unsafe_full_pass<E: MultiMillerLoop, C: Circuit<E::Scalar>>(
                     proof.clone(),
                     hash,
                 );
-            }
-            end_timer!(timer);
-        }
-
-        // circuit single check
-        if false && hash == TranscriptHash::Poseidon {
-            let timer = start_timer!(|| "circuit verify single proof");
-            for (i, proof) in proofs.iter().enumerate() {
-                let (circuit, instances) =
-                    circuit_verifier::build_single_proof_verify_circuit::<E>(
-                        &params_verifier,
-                        &vkey,
-                        &instances[i],
-                        proof.clone(),
-                        hash,
-                    );
-                const K: u32 = 21;
-                let prover = MockProver::run(K, &circuit, vec![instances]).unwrap();
-                assert_eq!(prover.verify(), Ok(()));
             }
             end_timer!(timer);
         }

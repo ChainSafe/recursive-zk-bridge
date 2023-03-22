@@ -11,7 +11,7 @@ common = { path = "../common" }
 halo2_gadgets = { git = "https://github.com/junyu0312/halo2.git", branch = "gpu" }
 halo2_proofs = { git = "https://github.com/junyu0312/halo2.git", branch = "gpu" }
 halo2aggregator-s = { git = "https://github.com/DelphinusLab/halo2aggregator-s", tag = "0.1.0" }
-halo2ecc-s = { git = "https://github.com/DelphinusLab/halo2ecc-s.git", tag = "0.2.0" }
+halo2ecc-s = { git = "https://github.com/timoftime/halo2ecc-s.git", branch = "main" } # { path = "../../examples/halo2ecc-s" }
 hex = "0.4.3"
 itertools = "0.10.5"
 rand = "0.8.5"
@@ -24,10 +24,18 @@ num-integer = "0.1.45"
 num-traits = "0.2.15"
 crypto-bigint = "0.5.0"
 num-modular = "0.4.2"
+rayon = "1.7.0"
+
+[dev-dependencies]
+criterion = "0.4.0"
 
 [features]
 default = []
 cuda = ["halo2_proofs/cuda", "halo2ecc-s/cuda"]
 #unstable = ["halo2_gadgets/unstable"]
+
+[[bench]]
+name = "bench"
+harness = false
 
 

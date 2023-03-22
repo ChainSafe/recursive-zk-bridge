@@ -293,7 +293,7 @@ fn gen_keypair(mut rng: impl RngCore) -> (halo2_proofs::pairing::bls12_381::Fr, 
 
 #[test]
 fn test_standalone_circuit() {
-    let circuit = circuit_with_input("../input.json");
+    let (circuit, instance) = circuit_with_input("../input.json")[1].clone();
 
     let prover = match MockProver::run(22, &circuit, vec![]) {
         Ok(prover) => prover,
@@ -328,38 +328,41 @@ pub fn circuit_with_random_input() -> SCRotationStepCircuit {
     }
 }
 
-pub fn circuit_with_input(p: impl AsRef<Path>) -> SCRotationStepCircuit {
-    let input = {
-        let inputs: Vec<SlotCommitteeRotation> =
-            serde_json::from_slice(&fs::read(p).unwrap()).unwrap();
-        inputs[0].clone()
-    };
+pub fn circuit_with_input(p: impl AsRef<Path>) -> Vec<(SCRotationStepCircuit, Vec<Vec<Fr>>)> {
+    let inputs: Vec<SlotCommitteeRotation> =
+        serde_json::from_slice(&fs::read(p).unwrap()).unwrap();
 
-    let pub_keys = input
-        .pubkey_hexes
-        .into_iter()
-        .map(|pk| G1Affine::from_compressed(&pk.try_into().unwrap()).unwrap())
-        .collect_vec();
+    let mut circuits = vec![];
 
-    let signature =
-        G2Affine::from_compressed(input.signature_hex.as_slice().try_into().unwrap()).unwrap();
-    let message_hash =
-        G2Affine::from_compressed(input.hm_hex.as_slice().try_into().unwrap()).unwrap();
+    for input in inputs {
+        let pub_keys = input
+            .pubkey_hexes
+            .into_iter()
+            .map(|pk| G1Affine::from_compressed(&pk.try_into().unwrap()).unwrap())
+            .collect_vec();
 
-    let mut agg_pubkey = G1::identity().to_affine();
-    for pk in &pub_keys {
-        agg_pubkey = agg_pubkey.add(pk.clone()).to_affine();
+        let signature =
+            G2Affine::from_compressed(input.signature_hex.as_slice().try_into().unwrap()).unwrap();
+        let message_hash =
+            G2Affine::from_compressed(input.hm_hex.as_slice().try_into().unwrap()).unwrap();
+
+        let mut agg_pubkey = G1::identity().to_affine();
+        for pk in &pub_keys {
+            agg_pubkey = agg_pubkey.add(pk.clone()).to_affine();
+        }
+
+        assert_eq!(
+            pairing(&G1Affine::generator(), &signature),
+            pairing(&agg_pubkey, &message_hash)
+        );
+
+        circuits.push((SCRotationStepCircuit {
+            pub_keys,
+            signature,
+            message_hash_point: message_hash,
+            message_hash: input.old_committee_root.try_into().unwrap(),
+        }, vec![]));
     }
 
-    assert_eq!(
-        pairing(&G1Affine::generator(), &signature),
-        pairing(&agg_pubkey, &message_hash)
-    );
-
-    SCRotationStepCircuit {
-        pub_keys,
-        signature,
-        message_hash_point: message_hash,
-        message_hash: input.old_committee_root.try_into().unwrap(),
-    }
+    circuits
 }
