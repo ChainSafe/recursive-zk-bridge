@@ -72,7 +72,7 @@ fn test_proof_aggregation_circuit() {
     let (circuit, instances) = run_circuit_unsafe_full_pass::<Bn256, _>(
         path,
         "step-circuit",
-        20,
+        22,
         circuits,
         instances,
         TranscriptHash::Poseidon,

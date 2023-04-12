@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 // use bls12_381_plus::{ExpandMsgXmd, G1Projective, G2Projective};
 use group::{Curve, GroupEncoding};
 use itertools::Itertools;
-use milagro_bls::amcl_utils::{hash_to_curve_g2, Big, DBig, GroupG1, GroupG2, FP, FP2, MODULUS};
+// use milagro_bls::amcl_utils::{hash_to_curve_g2, Big, DBig, GroupG1, GroupG2, FP, FP2, MODULUS};
 use milagro_bls::{AggregatePublicKey, AggregateSignature, Signature};
 use rand::rngs::OsRng;
 use rand::{seq::IteratorRandom, thread_rng, Rng};
