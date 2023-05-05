@@ -1,5 +1,5 @@
 #!/bin/bash
-PHASE1_FILE=powersOfTau28_hez_final_22.ptau
+PHASE1_FILE=powersOfTau28_hez_final_26.ptau
 BUILD_DIR=./build
 PHASE1=$BUILD_DIR/$PHASE1_FILE
 CIRCUIT_NAME=committee_rotation_step
@@ -10,24 +10,25 @@ if [ -f $PHASE1 ]; then
     echo "$PHASE1_FILE already exists. Skipping."
 else
     echo "Downloading $PHASE1_FILE"
-    wget https://hermez.s3-eu-west-1.amazonaws.com/$PHASE1_FILE -P $BUILD_DIR
+    wget https://hermez.s3-eu-west-1.amazonaws.com/$PHASE1_FILE -P ./
 fi
+
 
 if [ ! -d "$BUILD_DIR" ]; then
     echo "No build directory found. Creating build directory..."
     mkdir -p "$BUILD_DIR"
 fi
 
-echo "****COMPILING CIRCUIT****"
-start=`date +%s`
-circom "./circuits/$CIRCUIT_NAME.circom" --O1 --r1cs --sym --wasm --output "$BUILD_DIR"
-sleep 10
-end=`date +%s`
-echo "DONE ($((end-start))s)"
+#echo "****COMPILING CIRCUIT****"
+#start=`date +%s`
+#circom "./circuits/$CIRCUIT_NAME.circom" --O1 --r1cs --sym --c --output "$BUILD_DIR" -l ./node_modules/circomlib/
+#sleep 10
+#end=`date +%s`
+#echo "DONE ($((end-start))s)"
 
 echo "****Executing witness generation****"
 start=`date +%s`
-node ./"$OUTPUT_DIR"/generate_witness.js ./"$OUTPUT_DIR"/$CIRCUIT_NAME.wasm "$BUILD_DIR"/circom_input.json ./"$OUTPUT_DIR"/witness.wtns
+node ./"$OUTPUT_DIR"/generate_witness.js ./"$OUTPUT_DIR"/$CIRCUIT_NAME.wasm "$TEST_DIR"/input_step_0.json ./"$OUTPUT_DIR"/witness.wtns
 end=`date +%s`
 echo "DONE ($((end-start))s)"
 

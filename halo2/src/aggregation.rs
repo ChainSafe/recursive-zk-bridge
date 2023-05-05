@@ -27,7 +27,7 @@ fn test_one_layer_recursion_circuit() {
 
     let path = Path::new(path);
 
-    let (circuit, instances) = circuit_with_input("../input.json")[0].clone();
+    let (circuit, instances) = circuit_with_input("../input_512.json")[0].clone();
 
     let (circuit, instances) = run_circuit_unsafe_full_pass::<Bn256, _>(
         path,
@@ -60,7 +60,7 @@ fn test_proof_aggregation_circuit() {
 
     let path = Path::new(path);
 
-    let step_circuits = circuit_with_input("../input.json");
+    let step_circuits = circuit_with_input("../input_512.json");
 
     let mut circuits = vec![];
     let mut instances = vec![];
@@ -72,7 +72,7 @@ fn test_proof_aggregation_circuit() {
     let (circuit, instances) = run_circuit_unsafe_full_pass::<Bn256, _>(
         path,
         "step-circuit",
-        22,
+        23,
         circuits,
         instances,
         TranscriptHash::Poseidon,

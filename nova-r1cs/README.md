@@ -8,6 +8,12 @@
 
 ## Instruction
 
+Install dependencies
+
+```bash
+npm i && cd circom-pairing && npm i && cd ..
+```
+
 Compile Circom circuits. Use `--c` for native witness generation.
 
 ```bash

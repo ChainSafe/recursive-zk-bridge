@@ -1,5 +1,5 @@
 #!/bin/bash
-PHASE1_FILE=powersOfTau28_hez_final_22.ptau
+PHASE1_FILE=powersOfTau28_hez_final_26.ptau
 BUILD_DIR=./build
 PHASE1=$BUILD_DIR/$PHASE1_FILE
 CIRCUIT_NAME=committee_rotation_step
@@ -10,7 +10,7 @@ if [ -f $PHASE1 ]; then
     echo "$PHASE1_FILE already exists. Skipping."
 else
     echo "Downloading $PHASE1_FILE"
-    wget https://hermez.s3-eu-west-1.amazonaws.com/$PHASE1_FILE -P $BUILD_DIR
+    wget https://hermez.s3-eu-west-1.amazonaws.com/$PHASE1_FILE -P ./
 fi
 
 
@@ -19,12 +19,12 @@ if [ ! -d "$BUILD_DIR" ]; then
     mkdir -p "$BUILD_DIR"
 fi
 
-echo "****COMPILING CIRCUIT****"
-start=`date +%s`
-circom "./circuits/$CIRCUIT_NAME.circom" --O1 --r1cs --sym --c --output "$BUILD_DIR"
-sleep 10
-end=`date +%s`
-echo "DONE ($((end-start))s)"
+#echo "****COMPILING CIRCUIT****"
+#start=`date +%s`
+#circom "./circuits/$CIRCUIT_NAME.circom" --O1 --r1cs --sym --c --output "$BUILD_DIR" -l ./node_modules/circomlib/
+#sleep 10
+#end=`date +%s`
+#echo "DONE ($((end-start))s)"
 
 echo "****Running make to make witness generation binary****"
 start=`date +%s`
@@ -34,7 +34,7 @@ echo "DONE ($((end-start))s)"
 
  echo "****Executing witness generation****"
 start=`date +%s`
-./"$OUTPUT_DIR"/"$CIRCUIT_NAME" "$TEST_DIR"/input_aggregate_bls_verify_512.json witness.wtns
+./"$OUTPUT_DIR"/"$CIRCUIT_NAME" "$TEST_DIR"/input_step_0.json "$OUTPUT_DIR"/witness.wtns
 end=`date +%s`
 echo "DONE ($((end-start))s)"
 
@@ -46,7 +46,7 @@ echo "DONE ($((end-start))s)"
 
 echo "****GENERATING ZKEY 0****"
 start=`date +%s`
-npx --trace-gc --trace-gc-ignore-scavenger --max-old-space-size=2048000 --initial-old-space-size=2048000 --no-global-gc-scheduling --no-incremental-marking --max-semi-space-size=1024 --initial-heap-size=2048000 --expose-gc snarkjs zkey new "$BUILD_DIR"/"$CIRCUIT_NAME".r1cs "$PHASE1" "$OUTPUT_DIR"/"$CIRCUIT_NAME"_p1.zkey
+npx snarkjs zkey new "$BUILD_DIR"/"$CIRCUIT_NAME".r1cs "$PHASE1" "$OUTPUT_DIR"/"$CIRCUIT_NAME"_p1.zkey
 end=`date +%s`
 echo "DONE ($((end-start))s)"
 

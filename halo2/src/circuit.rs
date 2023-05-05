@@ -118,7 +118,7 @@ impl Circuit<Fr> for SCRotationStepCircuit {
                 .unwrap();
 
             layouter.assign_region(
-                || "bls_verification",
+                || "hash_to_curve",
                 |mut region| {
                     records.assign_all(&mut region, &base_chip, &range_chip)?;
                     Ok(())
@@ -201,7 +201,9 @@ impl Circuit<Fr> for SCRotationStepCircuit {
         let pubkeys_root = {
             let mut leafs_layer = vec![];
 
-            for layer in 0..5 {
+            let tree_height = (pubkey_hexes.len() as f32).log2().ceil() as usize + 1;
+
+            for layer in 0..tree_height {
                 if layer == 0 {
                     for mut pubkey_hex in pubkey_hexes.clone() {
                         pubkey_hex.resize(64, 0);
@@ -293,7 +295,7 @@ fn gen_keypair(mut rng: impl RngCore) -> (halo2_proofs::pairing::bls12_381::Fr, 
 
 #[test]
 fn test_standalone_circuit() {
-    let (circuit, instance) = circuit_with_input("../input.json")[1].clone();
+    let (circuit, instance) = circuit_with_input("../input_16.json")[1].clone();
 
     let prover = match MockProver::run(22, &circuit, vec![]) {
         Ok(prover) => prover,

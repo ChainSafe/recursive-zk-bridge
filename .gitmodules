@@ -1,3 +1,6 @@
 [submodule "nova-r1cs/circom-pairing"]
 	path = nova-r1cs/circom-pairing
 	url = https://github.com/yi-sun/circom-pairing
+[submodule "stark-groth16/garaga"]
+	path = stark-groth16/garaga
+	url = https://github.com/keep-starknet-strange/garaga.git

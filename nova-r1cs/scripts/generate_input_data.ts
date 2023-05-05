@@ -26,13 +26,10 @@ import {
 var n: number = 55;
 var k: number = 7;
 
-
 function point_to_bigint(point: PointG1): [bigint, bigint] {
   let [x, y] = point.toAffine();
   return [x.value, y.value];
 }
-
-const slots: number = 2;
 
 function getMultipleRandom(arr: Uint8Array[], num: number): Uint8Array[] {
   const shuffled = [...arr].sort(() => 0.5 - Math.random());
@@ -40,7 +37,7 @@ function getMultipleRandom(arr: Uint8Array[], num: number): Uint8Array[] {
   return shuffled.slice(0, num);
 }
 
-async function generate_data(b: number = 16) {
+async function generate_data(b: number = 16, slots: number = 5) {
   // const sszCircuit = await wasm_tester("circuits/simple_serialize.circom");
   // await sszCircuit.loadConstraints();
   const privateKeys = [];
@@ -69,7 +66,7 @@ async function generate_data(b: number = 16) {
       ];
     });
 
-    resultSlots.push({
+    let slot = {
       "old_committee_root": Array.from(oldCommitteeRoot),
       "pubkeys": pubkeys,
       "pubkeybits": new Array(b).fill(1),
@@ -83,7 +80,9 @@ async function generate_data(b: number = 16) {
       ),
       "signature_hex": hexToIntArray(toHexString(aggSignature)),
       "hm_hex": hexToIntArray(toHexString((await PointG2.hashToCurve(oldCommitteeRoot, htfDefaults)).toRawBytes(true)))
-    })
+    };
+
+    resultSlots.push(slot)
 
     const CustomSyncCommittee = new ContainerType({
       pubkeys: new VectorCompositeType(new ByteVectorType(48), b),
@@ -97,12 +96,17 @@ async function generate_data(b: number = 16) {
 
     oldCommitteeRoot = CustomSyncCommittee.hashTreeRoot(sc);
     console.log("sync committee ssz", toHexString(oldCommitteeRoot));
+
+    fs.writeFileSync(
+        `./test/input_step_${i}.json`,
+        JSON.stringify(resultSlots, (_, v) => typeof v === 'bigint' ? v.toString() : v)
+    );
   }
 
   fs.writeFileSync(
-      "../input.json",
+      `../input_${b}.json`,
       JSON.stringify(resultSlots, (_, v) => typeof v === 'bigint' ? v.toString() : v)
   );
 }
 
-generate_data(16);
+generate_data(1024, 2);
