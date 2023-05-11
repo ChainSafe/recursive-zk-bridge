@@ -1,14 +1,10 @@
-REMOTE_HOST=3.139.88.71
+REMOTE_HOST=18.224.69.206
 
 setup:
 	sudo apt update
-	sudo apt install nodejs
-	sudo apt install npm
-	sudo apt install build-essential
-	sudo apt-get install libgmp-dev
-	sudo apt-get install libsodium-dev
-	sudo apt-get install nasm
+	sudo apt install build-essential libgmp-dev libsodium-dev nasm nlohmann-json3-dev
 	curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+	sudo apt install nodejs npm
 	git clone https://github.com/nalinbhardwaj/circom.git && cd circom && git checkout pasta
 	cargo install --path circom
 	cd ..
@@ -19,6 +15,7 @@ setup:
 	npx task createFieldSources
 	npx task buildProver
 	cd ..
+	sudo sysctl -w vm.max_map_count=655300
 
 
 sync_out:

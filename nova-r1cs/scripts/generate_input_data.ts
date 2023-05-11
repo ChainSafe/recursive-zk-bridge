@@ -97,9 +97,17 @@ async function generate_data(b: number = 16, slots: number = 5) {
     oldCommitteeRoot = CustomSyncCommittee.hashTreeRoot(sc);
     console.log("sync committee ssz", toHexString(oldCommitteeRoot));
 
+    let circom_input = {
+      "step_in": slot["old_committee_root"],
+      "pubkeys": slot["pubkeys"],
+      "pubkeybits": slot["pubkeybits"],
+      "signature": slot["signature"],
+      "pubkeyHex": slot["pubkey_hexes"],
+      "aggregatePubkeyHex": slot["agg_pubkey_hex"]
+    };
     fs.writeFileSync(
         `./test/input_step_${i}.json`,
-        JSON.stringify(resultSlots, (_, v) => typeof v === 'bigint' ? v.toString() : v)
+        JSON.stringify(circom_input, (_, v) => typeof v === 'bigint' ? v.toString() : v)
     );
   }
 
@@ -109,4 +117,4 @@ async function generate_data(b: number = 16, slots: number = 5) {
   );
 }
 
-generate_data(1024, 2);
+generate_data(16, 2);

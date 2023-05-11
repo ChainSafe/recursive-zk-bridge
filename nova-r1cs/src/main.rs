@@ -21,7 +21,7 @@ fn main() {
     end_timer!(timer);
 
     let inputs: Vec<SlotCommitteeRotation> =
-    serde_json::from_slice(&fs::read("../input.json").unwrap()).unwrap();
+    serde_json::from_slice(&fs::read("../input_16.json").unwrap()).unwrap();
 
     let mut private_inputs = Vec::new();
     for input in inputs.into_iter().take(iteration_count) {

@@ -10,7 +10,7 @@ use halo2_proofs::pairing::group::{Curve, Group, GroupEncoding};
 use halo2_proofs::{
     arithmetic::{BaseExt, FieldExt},
     circuit::{Layouter, SimpleFloorPlanner},
-    dev::MockProver,
+    dev::{MockProver, CircuitCost},
     pairing::bn256::{Bn256, Fr},
     plonk::{
         create_proof, keygen_pk, keygen_vk, verify_proof, Circuit, ConstraintSystem, Error,
@@ -23,12 +23,14 @@ use halo2ecc_s::assign::{AssignedCondition, AssignedFq2, AssignedG2Affine, Assig
 use halo2ecc_s::circuit::ecc_chip::{EccBaseIntegerChipWrapper, EccChipBaseOps};
 use halo2ecc_s::circuit::fq12::{Fq12ChipOps, Fq2ChipOps};
 use halo2ecc_s::circuit::pairing_chip::PairingChipOps;
+use halo2ecc_s::circuit::select_chip;
 use halo2ecc_s::context::{GeneralScalarEccContext, IntegerContext, NativeScalarEccContext};
 use halo2ecc_s::utils::field_to_bn;
 use halo2ecc_s::{
     circuit::{
         base_chip::{BaseChip, BaseChipConfig, BaseChipOps},
         range_chip::{RangeChip, RangeChipConfig, RangeChipOps},
+        select_chip::{SelectChip, SelectChipConfig},
     },
     context::{Context, Records},
 };
@@ -56,6 +58,7 @@ const DST: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
 pub struct SCRotationStepConfig {
     base_chip_config: BaseChipConfig,
     range_chip_config: RangeChipConfig,
+    select_chip_config: SelectChipConfig,
     sha256: Table16Config,
 }
 
@@ -79,9 +82,11 @@ impl Circuit<Fr> for SCRotationStepCircuit {
     fn configure(meta: &mut ConstraintSystem<Fr>) -> Self::Config {
         let base_chip_config = BaseChip::configure(meta);
         let range_chip_config = RangeChip::<Fr>::configure(meta);
+        let select_chip_config = SelectChip::<Fr>::configure(meta);
         SCRotationStepConfig {
             base_chip_config,
             range_chip_config,
+            select_chip_config,
             sha256: Table16Chip::configure(meta),
         }
     }
@@ -93,6 +98,8 @@ impl Circuit<Fr> for SCRotationStepCircuit {
     ) -> Result<(), Error> {
         let base_chip = BaseChip::<Fr>::new(config.base_chip_config);
         let range_chip = RangeChip::<Fr>::new(config.range_chip_config);
+        let select_chip = SelectChip::<Fr>::new(config.select_chip_config);
+
 
         range_chip.init_table(&mut layouter)?;
 
@@ -120,7 +127,7 @@ impl Circuit<Fr> for SCRotationStepCircuit {
             layouter.assign_region(
                 || "hash_to_curve",
                 |mut region| {
-                    records.assign_all(&mut region, &base_chip, &range_chip)?;
+                    records.assign_all(&mut region, &base_chip, &range_chip, &select_chip)?;
                     Ok(())
                 },
             )?;
@@ -178,7 +185,7 @@ impl Circuit<Fr> for SCRotationStepCircuit {
                     .unwrap()
                     .into_inner()
                     .unwrap()
-                    .assign_all(&mut region, &base_chip, &range_chip)?;
+                    .assign_all(&mut region, &base_chip, &range_chip, &select_chip)?;
 
                 end_timer!(timer);
 
@@ -278,7 +285,7 @@ impl Circuit<Fr> for SCRotationStepCircuit {
         layouter.assign_region(
             || "bls_verification",
             |mut region| {
-                records.assign_all(&mut region, &base_chip, &range_chip)?;
+                records.assign_all(&mut region, &base_chip, &range_chip, &select_chip)?;
                 Ok(())
             },
         )?;

@@ -38,6 +38,7 @@ use halo2ecc_s::{
     circuit::{
         base_chip::{BaseChip, BaseChipConfig, BaseChipOps},
         range_chip::{RangeChip, RangeChipConfig, RangeChipOps},
+        select_chip::{SelectChip, SelectChipConfig},
     },
     context::{Context, Records},
 };
@@ -942,10 +943,11 @@ mod tests {
 
     #[test]
     fn test_hash2curve_circuit() {
+        #[derive(Clone)]
         struct MyCircuit {}
 
         impl Circuit<Fr> for MyCircuit {
-            type Config = (BaseChipConfig, RangeChipConfig, Table16Config);
+            type Config = (BaseChipConfig, RangeChipConfig, SelectChipConfig, Table16Config);
             type FloorPlanner = SimpleFloorPlanner;
 
             fn without_witnesses(&self) -> Self {
@@ -956,6 +958,7 @@ mod tests {
                 (
                     BaseChip::configure(meta),
                     RangeChip::configure(meta),
+                    SelectChip::configure(meta),
                     Table16Chip::configure(meta),
                 )
             }
@@ -967,11 +970,12 @@ mod tests {
             ) -> Result<(), Error> {
                 let base_chip = BaseChip::<Fr>::new(config.0.clone());
                 let range_chip = RangeChip::<Fr>::new(config.1.clone());
-                let hash_chip = Table16Chip::construct(config.2.clone());
+                let select_chip = SelectChip::<Fr>::new(config.2.clone());
+                let hash_chip = Table16Chip::construct(config.3.clone());
 
                 range_chip.init_table(&mut layouter)?;
 
-                Table16Chip::load(config.2.clone(), &mut layouter)?;
+                Table16Chip::load(config.3.clone(), &mut layouter)?;
 
                 let ctx = Rc::new(RefCell::new(Context::new()));
 
@@ -995,7 +999,7 @@ mod tests {
                 layouter.assign_region(
                     || "assign",
                     |mut region| {
-                        records.assign_all(&mut region, &base_chip, &range_chip)?;
+                        records.assign_all(&mut region, &base_chip, &range_chip, &select_chip)?;
                         Ok(())
                     },
                 )?;
@@ -1008,22 +1012,22 @@ mod tests {
 
         let path = Path::new("./build");
 
-        run_circuit_unsafe_full_pass::<Bn256, _>(
-            path,
-            "hash-to-curve",
-            20,
-            vec![circuit],
-            vec![vec![]],
-            TranscriptHash::Sha,
-            vec![],
-            true,
-        );
+        // run_circuit_unsafe_full_pass::<Bn256, _>(
+        //     path,
+        //     "hash-to-curve",
+        //     20,
+        //     vec![circuit],
+        //     vec![vec![]],
+        //     TranscriptHash::Sha,
+        //     vec![],
+        //     true,
+        // );
 
-        // let circuit = MyCircuit {};
-        // let prover = match MockProver::<Fr>::run(20, &circuit, vec![]) {
-        //     Ok(prover) => prover,
-        //     Err(e) => panic!("{:?}", e),
-        // };
-        // prover.verify().unwrap()
+        let circuit = MyCircuit {};
+        let prover = match MockProver::<Fr>::run(20, &circuit, vec![]) {
+            Ok(prover) => prover,
+            Err(e) => panic!("{:?}", e),
+        };
+        prover.verify().unwrap()
     }
 }

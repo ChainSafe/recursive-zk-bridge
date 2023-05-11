@@ -1,0 +1,110 @@
+****COMPILING CIRCUIT****
+template instances: 373
+non-linear constraints: 21792139
+linear constraints: 1217351
+public inputs: 32
+public outputs: 32
+private inputs: 1084
+private outputs: 0
+wires: 22875079
+labels: 39489844
+Written successfully: ./build/committee_rotation_step.r1cs
+Written successfully: ./build/committee_rotation_step.sym
+Written successfully: ./build/committee_rotation_step_cpp/committee_rotation_step.cpp and ./build/committee_rotation_step_cpp/committee_rotation_step.dat
+Written successfully: ./build/committee_rotation_step_cpp/main.cpp, circom.hpp, calcwit.hpp, calcwit.cpp, fr.hpp, fr.cpp, fr.asm and Makefile
+Everything went okay, circom safe
+DONE (704s)
+****Running make to make witness generation binary****
+make: Entering directory '/home/ubuntu/recursive-zk-bridge/nova-r1cs/build/committee_rotation_step_cpp'
+g++ -c main.cpp -std=c++11 -O3 -I.
+g++ -c calcwit.cpp -std=c++11 -O3 -I.
+g++ -c fr.cpp -std=c++11 -O3 -I.
+nasm -felf64 fr.asm -o fr_asm.o
+g++ -c committee_rotation_step.cpp -std=c++11 -O3 -I.
+g++ -o committee_rotation_step *.o -lgmp 
+make: Leaving directory '/home/ubuntu/recursive-zk-bridge/nova-r1cs/build/committee_rotation_step_cpp'
+DONE (42s)
+****Executing witness generation****
+DONE (83s)
+****Converting witness to json****
+DONE (98s)
+****GENERATING ZKEY 0****
+[INFO]  snarkJS: Reading r1cs
+[INFO]  snarkJS: Reading tauG1
+[INFO]  snarkJS: Reading tauG2
+[INFO]  snarkJS: Reading alphatauG1
+[INFO]  snarkJS: Reading betatauG1
+[INFO]  snarkJS: Circuit hash:
+                f2abd5ae 1311e28f 478bbef1 425ae702
+                50e7650e a00e4c5d 7d386c38 8da15d17
+                76be394e d7860b53 583350ff a9e787ad
+                47fad615 0ae78f27 ca23cdf8 fe6333b9
+        Command being timed: "/usr/bin/node --max-old-space-size=2048000 --initial-old-space-size=2048000 --no-global-gc-scheduling --no-incremental-marking --max-semi-space-size=1024 --initial-heap-size=2048000 --
+expose-gc node_modules/snarkjs/cli.js zkey new ./build/committee_rotation_step.r1cs ./build/powersOfTau28_hez_final_26.ptau ./build/committee_rotation_step_cpp/committee_rotation_step_p1.zkey"
+        User time (seconds): 31128.97
+        System time (seconds): 368.00
+        Percent of CPU this job got: 795%
+        Elapsed (wall clock) time (h:mm:ss or m:ss): 1:05:57
+        Average shared text size (kbytes): 0
+        Average unshared data size (kbytes): 0
+        Average stack size (kbytes): 0
+        Average total size (kbytes): 0
+        Maximum resident set size (kbytes): 143916192
+        Average resident set size (kbytes): 0
+        Major (requiring I/O) page faults: 0
+        Minor (reclaiming a frame) page faults: 112863716
+        Voluntary context switches: 18585920
+        Involuntary context switches: 69861
+        Swaps: 0
+        File system inputs: 16777216
+        File system outputs: 27530528
+        Socket messages sent: 0
+        Socket messages received: 0
+        Signals delivered: 0
+        Page size (bytes): 4096
+        Exit status: 0
+DONE (3958s)
+****CONTRIBUTE TO PHASE 2 CEREMONY****
+[INFO]  snarkJS: Circuit Hash:
+                f2abd5ae 1311e28f 478bbef1 425ae702
+                50e7650e a00e4c5d 7d386c38 8da15d17
+                76be394e d7860b53 583350ff a9e787ad
+                47fad615 0ae78f27 ca23cdf8 fe6333b9
+[INFO]  snarkJS: Contribution Hash:
+                950a6a3e 08cc44bd b0c536f7 2ac5169e
+                e326a015 e892cbf2 774a2b18 a04061bb
+                82cca4fa 45f93f49 2b0b3c4d 485c2e8c
+                2df3c386 21e90cad 87c07adc ae91104c
+        Command being timed: "/usr/bin/node --max-old-space-size=2048000 --initial-old-space-size=2048000 --no-global-gc-scheduling --no-incremental-marking --max-semi-space-size=1024 --initial-heap-size=2048000 --
+expose-gc node_modules/snarkjs/cli.js zkey contribute ./build/committee_rotation_step_cpp/committee_rotation_step_p1.zkey ./build/committee_rotation_step_cpp/committee_rotation_step_p2.zkey -n=First phase2 contribu
+tion -e=some random text for entropy"
+        User time (seconds): 29566.62
+        System time (seconds): 51.73
+        Percent of CPU this job got: 5541%
+        Elapsed (wall clock) time (h:mm:ss or m:ss): 8:54.46
+        Average shared text size (kbytes): 0
+        Average unshared data size (kbytes): 0
+        Average stack size (kbytes): 0
+        Average total size (kbytes): 0
+        Maximum resident set size (kbytes): 3203708
+        Average resident set size (kbytes): 0
+        Major (requiring I/O) page faults: 0
+        Minor (reclaiming a frame) page faults: 921472
+        Voluntary context switches: 4232427
+        Involuntary context switches: 118090
+        Swaps: 0
+        File system inputs: 8
+        File system outputs: 25559320
+        Socket messages sent: 0
+        Socket messages received: 0
+        Signals delivered: 0
+        Page size (bytes): 4096
+        Exit status: 0
+DONE (534s)
+****EXPORTING VKEY****
+DONE (2s)
+****GENERATING PROOF FOR SAMPLE INPUT****
+DONE (25s)
+****VERIFYING PROOF FOR SAMPLE INPUT****
+[INFO]  snarkJS: OK!
+DONE (2s)

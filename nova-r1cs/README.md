@@ -8,6 +8,12 @@
 
 ## Instruction
 
+Setup: increase maximum number of mapped ranges (details [here](https://www.systutorials.com/maximum-number-of-mmaped-ranges-and-how-to-set-it-on-linux/))
+
+```bash
+sudo sysctl -w vm.max_map_count=655300
+```
+
 Install dependencies
 
 ```bash

@@ -19,6 +19,28 @@ use halo2aggregator_s::circuit_verifier::circuit::AggregatorCircuit;
 use halo2aggregator_s::native_verifier::verify_proofs;
 use halo2aggregator_s::transcript::poseidon::PoseidonRead;
 use halo2aggregator_s::transcript::sha256::ShaRead;
+use rayon::prelude::*;
+
+#[test]
+fn test_single_step_circuit() {
+    let path = "./build";
+    DirBuilder::new().recursive(true).create(path).unwrap();
+
+    let path = Path::new(path);
+
+    let (circuit, instances) = circuit_with_input("../input_16.json")[0].clone();
+
+    run_circuit_unsafe_full_pass::<Bn256, _>(
+        path,
+        "step-circuit",
+        22,
+        vec![circuit],
+        vec![instances],
+        TranscriptHash::Blake2b,
+        vec![],
+        true,
+    );
+}
 
 #[test]
 fn test_one_layer_recursion_circuit() {
@@ -60,7 +82,7 @@ fn test_proof_aggregation_circuit() {
 
     let path = Path::new(path);
 
-    let step_circuits = circuit_with_input("../input_512.json");
+    let step_circuits = circuit_with_input("../input_16.json");
 
     let mut circuits = vec![];
     let mut instances = vec![];
@@ -72,7 +94,7 @@ fn test_proof_aggregation_circuit() {
     let (circuit, instances) = run_circuit_unsafe_full_pass::<Bn256, _>(
         path,
         "step-circuit",
-        23,
+        22,
         circuits,
         instances,
         TranscriptHash::Poseidon,
@@ -104,24 +126,20 @@ pub fn run_circuit_unsafe_full_pass<E: MultiMillerLoop, C: Circuit<E::Scalar>>(
     commitment_check: Vec<[usize; 4]>,
     force_create_proof: bool,
     // vkey_map: &mut HashMap<String, VerifyingKey<E::G1Affine>>
-) -> Option<(AggregatorCircuit<E::G1Affine>, Vec<E::Scalar>)> {
+)  -> Option<(AggregatorCircuit<E::G1Affine>, Vec<E::Scalar>)> /* where C : Sized + Clone + Sync */ {
     // 1. setup params
     let params =
         load_or_build_unsafe_params::<E>(k, Some(&cache_folder.join(format!("K{}.params", k))));
 
-    let mut vkey_map = HashMap::new();
-    let mut proofs = vec![];
+    // let mut vkey_map: HashMap<String, VerifyingKey<E::G1Affine>> = HashMap::new();
 
-    for (i, circuit) in circuits.into_iter().enumerate() {
-        // 2. setup vkey
-        let vkey = load_or_build_vkey::<E, C>(
-            &params,
-            &circuit,
-            None, //Some(&cache_folder.join(format!("{}.{}.vkey.data", prefix, i))),
-        );
+     // 2. setup vkey
+    let vkey = load_or_build_vkey::<E, C>(
+        &params,
+        &circuits[0],
+        None);
 
-        vkey_map.insert(format!("{}.{}.vkey.data", prefix, i), vkey.clone());
-
+    let proofs = circuits.into_iter().enumerate().map(|(i, circuit)| {
         // 3. create proof
         let proof = load_or_create_proof::<E, C>(
             &params,
@@ -132,13 +150,13 @@ pub fn run_circuit_unsafe_full_pass<E: MultiMillerLoop, C: Circuit<E::Scalar>>(
             hash,
             !force_create_proof,
         );
-        proofs.push(proof);
 
         store_instance(
             &instances[i],
             &cache_folder.join(format!("{}.{}.instance.data", prefix, i)),
         );
-    }
+        proof
+    }).collect::<Vec<_>>();
 
     // 4. many verify
     let public_inputs_size = instances.iter().fold(0usize, |acc, x| {
@@ -149,7 +167,8 @@ pub fn run_circuit_unsafe_full_pass<E: MultiMillerLoop, C: Circuit<E::Scalar>>(
     let mut vkeys = vec![];
 
     for (i, proof) in proofs.iter().enumerate() {
-        let vkey = vkey_map.get(&format!("{}.{}.vkey.data", prefix, i)).unwrap().clone();
+
+        println!("proof[{i}] size {} bytes", proof.len());
 
         // origin check
         if true {
@@ -197,7 +216,7 @@ pub fn run_circuit_unsafe_full_pass<E: MultiMillerLoop, C: Circuit<E::Scalar>>(
             end_timer!(timer);
         }
 
-        vkeys.push(vkey);
+        vkeys.push(vkey.clone());
     }
 
     // native multi check
