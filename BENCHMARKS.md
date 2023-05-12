@@ -13,9 +13,9 @@
 | Proof generation    | `185s` ✅ 1.0x | `55.3s` 🚀 3.4x  | `112s` 🚀 1.7x    | `892s` 🐢 4.8x    | `410s` 🐢 2.2x  |
 | Proof verification  | `10ms` ✅ 1.0x | `10ms` ✅ 1.0x   | `100ms` 🐢 10x    | `55.1ms` 🐢 5.5x  | `?`             |
 
-> **Note**: Proof verification in Circom is using JavaScript while other systems are using Rust. In reality Groth'16 would likely be faster to verify.
+> **Note**: Proof verification in Circom is using JavaScript while other systems use Rust. If compared fairly Groth'16 verification would likely be the fastest one of all.
 
-> I'm not an expert in Plonky2 but resulted prover time seem too slow. It's likely due to poorly optimized [implementation](https://github.com/polymerdao/plonky2-pairing). Another team from Jump crypto promised their [BLS pairing](https://github.com/jumpcrypto/plonky2-crypto#features) so we'll have to wait and see.
+> I'm not an expert in Plonky2 but resulted prover time seem too slow. It's likely due to poorly optimized [implementation](https://github.com/polymerdao/plonky2-pairing). Another team from JumpCrypto promised their [BLS pairing](https://github.com/jumpcrypto/plonky2-crypto#features) so we'll have to wait and see.
 
 > Cairo benchmarks are taken from [`0xNonCents/cairo-bls12-381`](https://github.com/0xNonCents/cairo-bls12-381#benchmark).
 
@@ -25,10 +25,10 @@ Following tests are done with `N=16` validators. Doing `N=512` is possibly with 
 
 |                     | Halo2                      | Halo2-GPU                   | Circom (Groth'16) |
 | ------------------- | -------------------------- | --------------------------- | ----------------- |
-| Circuit compilation | `453s` &emsp; ✅ 1.0x      | `80s` &emsp;&nbsp; 🚀 5.7x  | `1.5h`  🐢        |
-| Proof generation    | `508.9s` ✅ 1.0x           | `227.7s` 🚀 2.23x           | `108s` 🐢         |
-| Proof verification  | `51ms` &emsp;&nbsp;✅ 1.0x | `51ms`&emsp; ✅ 1.0x        | `1s`              |
-| Proof size          | `5.34kB` ✅ 1.0x           | `5.34kB` ✅ 1.0x            |                   |
+| Circuit compilation | `453s` &emsp; ✅ 1.0x      | `80s` &emsp;&nbsp; 🚀 5.7x  | `8.53h`  🐢 67.8x |
+| Proof generation    | `508.9s` ✅ 1.0x           | `227.7s` 🚀 2.23x           | `172s`  🚀 2.95x |
+| Proof verification  | `51ms` &emsp;&nbsp;✅ 1.0x | `51ms`&emsp; ✅ 1.0x        | `100ms`   🐢 1.9x |
+| Proof size          | `5.34kB` ✅ 1.0x           | `5.34kB` ✅ 1.0x            | `704B`   🚀 7.59x |
 
 > **Note**: My Halo2 implementation is far from optimal (can be improved by using lookup arguments and custom gates, parallelizing MSM, etc). All the while, Circom code is highly optimized and currently is being used in production by Succinct Labs.
 

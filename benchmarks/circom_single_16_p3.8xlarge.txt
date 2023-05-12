@@ -1,5 +1,0 @@
-
-****Executing witness generation****
-DONE (133s)
-****Converting witness to json****
-DONE (188s)

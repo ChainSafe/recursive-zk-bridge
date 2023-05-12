@@ -1,0 +1,61 @@
+****COMPILING CIRCUIT****
+template instances: 373
+non-linear constraints: 21792139
+linear constraints: 1217351
+public inputs: 32
+public outputs: 32
+private inputs: 1084
+private outputs: 0
+wires: 22875079
+labels: 39489844
+Written successfully: ./build/committee_rotation_step.r1cs
+Written successfully: ./build/committee_rotation_step.sym
+Written successfully: ./build/committee_rotation_step_cpp/committee_rotation_step.cpp and ./build/committee_rotation_step_cpp/committee_rotation_step.dat
+Written successfully: ./build/committee_rotation_step_cpp/main.cpp, circom.hpp, calcwit.hpp, calcwit.cpp, fr.hpp, fr.cpp, fr.asm and Makefile
+Everything went okay, circom safe
+DONE (871s)
+****Running make to make witness generation binary****
+make: Entering directory '/home/ubuntu/recursive-zk-bridge/nova-r1cs/build/committee_rotation_step_cpp'
+g++ -c main.cpp -std=c++11 -O3 -I.
+g++ -c calcwit.cpp -std=c++11 -O3 -I.
+g++ -c fr.cpp -std=c++11 -O3 -I.
+nasm -felf64 fr.asm -o fr_asm.o
+g++ -c committee_rotation_step.cpp -std=c++11 -O3 -I.
+g++ -o committee_rotation_step *.o -lgmp
+make: Leaving directory '/home/ubuntu/recursive-zk-bridge/nova-r1cs/build/committee_rotation_step_cpp'
+DONE (56s)
+****Executing witness generation****
+DONE (133s)
+****Converting witness to json****
+DONE (188s)
+****GENERATING ZKEY 0****
+[INFO]  snarkJS: Reading r1cs
+[INFO]  snarkJS: Reading tauG1
+[INFO]  snarkJS: Reading tauG2
+[INFO]  snarkJS: Reading alphatauG1
+[INFO]  snarkJS: Reading betatauG1
+[INFO]  snarkJS: Circuit hash:
+                f2abd5ae 1311e28f 478bbef1 425ae702
+                50e7650e a00e4c5d 7d386c38 8da15d17
+                76be394e d7860b53 583350ff a9e787ad
+                47fad615 0ae78f27 ca23cdf8 fe6333b9
+DONE (28229s)
+****CONTRIBUTE TO PHASE 2 CEREMONY****
+[INFO]  snarkJS: Circuit Hash:
+                f2abd5ae 1311e28f 478bbef1 425ae702
+                50e7650e a00e4c5d 7d386c38 8da15d17
+                76be394e d7860b53 583350ff a9e787ad
+                47fad615 0ae78f27 ca23cdf8 fe6333b9
+[INFO]  snarkJS: Contribution Hash:
+                5e5a9371 95f8ad89 35027de2 bafae20d
+                e2b740e7 45f5c276 67412f5b a94b68cf
+                fb119f6f 952d68bd a2861d70 c8ef4dc2
+                9f4fe65a 344eb8c8 b9af2f62 730ce415
+DONE (1582s)
+****EXPORTING VKEY****
+DONE (2s)
+****GENERATING PROOF****
+DONE (38s)
+****VERIFYING PROOF****
+[INFO]  snarkJS: OK!
+DONE (1s)
