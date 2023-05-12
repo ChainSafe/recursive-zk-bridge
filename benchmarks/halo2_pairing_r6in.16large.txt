@@ -1,0 +1,72 @@
+running 1 test
+offset 3115885 1250527 0
+Start:   assign
+End:     assign ....................................................................914.527ms
+Start:   assign
+End:     assign ....................................................................7.419s
+offset 3115885 1250487
+Start:   build params with K = 22
+test tests::general_scalar_pairing_chip::bench_bls12_381_pairing_chip_over_bn256_fr has been running for over 60 seconds
+End:     build params with K = 22 ..................................................50.478s
+Start:   build vk
+quotient_poly_degree 4
+··Start:   assign
+··End:     assign ..................................................................907.664ms
+··Start:   assign
+··End:     assign ..................................................................790.802ms
+End:     build vk ..................................................................20.744s
+quotient_poly_degree 4
+Start:   assign
+End:     assign ....................................................................907.842ms
+Start:   assign
+End:     assign ....................................................................785.985ms
+Start:   build pk
+··Start:   assign
+··End:     assign ..................................................................911.780ms
+··Start:   assign
+··End:     assign ..................................................................793.627ms
+End:     build pk ..................................................................72.946s
+Start:   create proof
+··Start:   instance
+··End:     instance ................................................................22.670µs
+··Start:   advice
+····Start:   assign
+····End:     assign ................................................................908.765ms
+····Start:   assign
+····End:     assign ................................................................651.423ms
+··End:     advice ..................................................................20.047s
+··Start:   lookups
+··End:     lookups .................................................................11.122s
+··Start:   permutations comitted
+··End:     permutations comitted ...................................................8.794s
+··Start:   lookups commited
+··End:     lookups commited ........................................................4.447s
+··Start:   vanishing commit
+··End:     vanishing commit ........................................................1.366s
+··Start:   h_poly
+····Start:   expressions
+····End:     expressions ...........................................................1.048s
+····Start:   permutations
+····End:     permutations ..........................................................847.334ms
+····Start:   eval_h_lookups
+····End:     eval_h_lookups ........................................................13.989s
+··End:     h_poly ..................................................................16.555s
+··Start:   vanishing construct
+do once!
+··End:     vanishing construct .....................................................6.985s
+··Start:   eval poly
+··End:     eval poly ...............................................................139.870ms
+··Start:   eval poly vanishing
+··End:     eval poly vanishing .....................................................88.401ms
+··Start:   eval poly permutation
+··End:     eval poly permutation ...................................................303.142ms
+··Start:   eval poly lookups
+··End:     eval poly lookups .......................................................73.265ms
+··Start:   multi open
+··End:     multi open ..............................................................13.527s
+End:     create proof ..............................................................83.727s
+Start:   verify proof
+End:     verify proof ..............................................................6.003ms
+test tests::general_scalar_pairing_chip::bench_bls12_381_pairing_chip_over_bn256_fr ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 283.04s

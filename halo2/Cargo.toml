@@ -10,8 +10,8 @@ ark-std = { version = "0.3.0", features = ["print-trace"] }
 common = { path = "../common" }
 halo2_gadgets = { git = "https://github.com/junyu0312/halo2.git", branch = "gpu" }
 halo2_proofs = { git = "https://github.com/junyu0312/halo2.git", branch = "gpu" }
-halo2aggregator-s = { git = "https://github.com/DelphinusLab/halo2aggregator-s", tag = "0.1.0" }
-halo2ecc-s = { git = "https://github.com/timoftime/halo2ecc-s.git", branch = "main" } # { path = "../../examples/halo2ecc-s" }
+halo2aggregator-s = { git = "https://github.com/DelphinusLab/halo2aggregator-s", branch = "bisect-lookup" }
+halo2ecc-s = { git = "https://github.com/timoftime/halo2ecc-s.git", rev = "855f897ae57e985cf080e151bfd82223c7f2902e" } # { path = "../../examples/halo2ecc-s" }
 hex = "0.4.3"
 itertools = "0.10.5"
 rand = "0.8.5"

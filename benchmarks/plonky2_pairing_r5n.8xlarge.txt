@@ -1,0 +1,10 @@
+running 1 test
+test gadgets::pairing::tests::test_pairing has been running for over 60 seconds
+[INFO  plonky2::plonk::circuit_builder] Degree before blinding & padding: 5546084
+[INFO  plonky2::plonk::circuit_builder] Degree after blinding & padding: 8388608
+[INFO  plonky2::util::timing] 1452.5709s to build
+[INFO  plonky2::util::timing] 892.2191s to prove
+[INFO  plonky2::util::timing] 0.0544s to verify
+test gadgets::pairing::tests::test_pairing ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 84 filtered out; finished in 2441.05s

@@ -1,0 +1,70 @@
+running 1 test
+test aggregation::test_single_step_circuit has been running for over 60 seconds
+write params K=22 to "./build/K22.params"
+quotient_poly_degree 8
+Start:   assign::bls_verification
+End:     assign::bls_verification ..................................................4.713s
+Start:   assign::bls_verification
+End:     assign::bls_verification ..................................................4.534s
+Start:   assign::sync_committee_ssz
+End:     assign::sync_committee_ssz ................................................198.442ms
+Start:   generate pkey
+··Start:   assign::bls_verification
+··End:     assign::bls_verification ................................................4.789s
+··Start:   assign::bls_verification
+··End:     assign::bls_verification ................................................4.587s
+··Start:   assign::sync_committee_ssz
+··End:     assign::sync_committee_ssz ..............................................202.931ms
+End:     generate pkey .............................................................452.995s
+Start:   create proof
+··Start:   instance
+··End:     instance ................................................................35.486µs
+··Start:   advice
+····Start:   assign::bls_verification
+····End:     assign::bls_verification ..............................................4.734s
+····Start:   assign::bls_verification
+····End:     assign::bls_verification ..............................................4.290s
+····Start:   assign::sync_committee_ssz
+····End:     assign::sync_committee_ssz ............................................301.055ms
+··End:     advice ..................................................................152.287s
+··Start:   lookups
+··End:     lookups .................................................................25.869s
+··Start:   permutations comitted
+··End:     permutations comitted ...................................................32.419s
+··Start:   lookups commited
+··End:     lookups commited ........................................................15.458s
+··Start:   vanishing commit
+··End:     vanishing commit ........................................................3.766s
+··Start:   h_poly
+····Start:   expressions
+····End:     expressions ...........................................................107.354s
+····Start:   permutations
+····End:     permutations ..........................................................9.166s
+····Start:   eval_h_lookups
+····End:     eval_h_lookups ........................................................82.542s
+··End:     h_poly ..................................................................202.327s
+··Start:   vanishing construct
+do once!
+··End:     vanishing construct .....................................................35.843s
+··Start:   eval poly
+··End:     eval poly ...............................................................866.996ms
+··Start:   eval poly vanishing
+··End:     eval poly vanishing .....................................................282.295ms
+··Start:   eval poly permutation
+··End:     eval poly permutation ...................................................720.363ms
+··Start:   eval poly lookups
+··End:     eval poly lookups .......................................................243.859ms
+··Start:   multi open
+··End:     multi open ..............................................................37.476s
+End:     create proof ..............................................................508.652s
+write transcript to "./build/step-circuit.0.transcript.data"
+write instance to "./build/step-circuit.0.instance.data"
+Start:   origin verify single proof
+End:     origin verify single proof ................................................21.826ms
+Start:   native verify single proof
+End:     native verify single proof ................................................51.039ms
+test aggregation::test_single_step_circuit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 1213.16s
+
+ubuntu@ip-172-16-2-54:~/recursive-zk-bridge/halo2$

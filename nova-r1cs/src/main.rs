@@ -14,15 +14,14 @@ fn main() {
     let root = current_dir().unwrap();
 
     let timer = start_timer!(|| "load_r1cs");
-    let circuit_file = root.join("./build/committee_rotation_step_s.r1cs");
+    let circuit_file = root.join("./build/committee_rotation_step_pasta.r1cs");
     let r1cs = load_r1cs(&FileLocation::PathBuf(circuit_file));
     let witness_generator_file =
-        root.join("./build/committee_rotation_step_s_js/committee_rotation_step_s.wasm");
+        root.join("./build/committee_rotation_step_pasta_js/committee_rotation_step_pasta.wasm");
     end_timer!(timer);
 
-    let timer = start_timer!(|| "create_public_params");
     let inputs: Vec<SlotCommitteeRotation> =
-        serde_json::from_slice(&fs::read("../input.json").unwrap()).unwrap();
+    serde_json::from_slice(&fs::read("../input_16.json").unwrap()).unwrap();
 
     let mut private_inputs = Vec::new();
     for input in inputs.into_iter().take(iteration_count) {
@@ -30,9 +29,7 @@ fn main() {
         private_input.insert("pubkeys".to_string(), json!(input.pubkeys));
         private_input.insert("pubkeybits".to_string(), json!(input.pubkeybits));
         private_input.insert("signature".to_string(), json!(input.signature));
-        private_input.insert("Hm".to_string(), json!(input.Hm));
         private_input.insert("pubkeyHex".to_string(), json!(input.pubkey_hexes));
-        private_input.insert("sszSyncCommittee".to_string(), json!(input.old_committee_root));
         private_input.insert(
             "aggregatePubkeyHex".to_string(),
             json!(input.agg_pubkey_hex),
@@ -43,25 +40,40 @@ fn main() {
 
     let start_public_input = [F1::from(0); 32].to_vec();
 
-    let pp = create_public_params(r1cs.clone());
 
-    println!(
-        "Number of constraints per step (primary circuit): {}",
-        pp.num_constraints().0
-    );
-    println!(
-        "Number of constraints per step (secondary circuit): {}",
-        pp.num_constraints().1
-    );
+    let (pp, timer)= if fs::metadata("./build/public_params.wtns").is_ok() {
+        let timer: ark_std::perf_trace::TimerInfo = start_timer!(|| "read_public_params");
 
-    println!(
-        "Number of variables per step (primary circuit): {}",
-        pp.num_variables().0
-    );
-    println!(
-        "Number of variables per step (secondary circuit): {}",
-        pp.num_variables().1
-    );
+        let pp_bytes = fs::read("./build/public_params.wtns").unwrap();
+        (serde_cbor::from_slice(&pp_bytes).unwrap(), timer)
+    } else {
+        let timer: ark_std::perf_trace::TimerInfo = start_timer!(|| "create_public_params");
+        
+        let pp = create_public_params(r1cs.clone());
+    
+        let pp_json = serde_cbor::to_vec(&pp).unwrap();
+        fs::write("./build/public_params.wtns", pp_json).unwrap();
+
+        println!(
+            "Number of constraints per step (primary circuit): {}",
+            pp.num_constraints().0
+        );
+        println!(
+            "Number of constraints per step (secondary circuit): {}",
+            pp.num_constraints().1
+        );
+    
+        println!(
+            "Number of variables per step (primary circuit): {}",
+            pp.num_variables().0
+        );
+        println!(
+            "Number of variables per step (secondary circuit): {}",
+            pp.num_variables().1
+        );
+    
+        (pp, timer)
+    };
 
     end_timer!(timer);
 

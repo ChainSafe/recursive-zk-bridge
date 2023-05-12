@@ -1,0 +1,68 @@
+running 1 test
+test aggregation::test_single_step_circuit has been running for over 60 seconds
+write params K=22 to "./build/K22.params"
+quotient_poly_degree 8
+Start:   assign::bls_verification
+End:     assign::bls_verification ..................................................4.955s
+Start:   assign::bls_verification
+End:     assign::bls_verification ..................................................4.571s
+Start:   assign::sync_committee_ssz
+End:     assign::sync_committee_ssz ................................................200.063ms
+Start:   generate pkey
+··Start:   assign::bls_verification
+··End:     assign::bls_verification ................................................4.739s
+··Start:   assign::bls_verification
+··End:     assign::bls_verification ................................................4.719s
+··Start:   assign::sync_committee_ssz
+··End:     assign::sync_committee_ssz ..............................................196.933ms
+End:     generate pkey .............................................................443.596s
+Start:   create proof
+··Start:   instance
+··End:     instance ................................................................47.877µs
+··Start:   advice
+····Start:   assign::bls_verification
+····End:     assign::bls_verification ..............................................4.895s
+····Start:   assign::bls_verification
+····End:     assign::bls_verification ..............................................4.656s
+····Start:   assign::sync_committee_ssz
+····End:     assign::sync_committee_ssz ............................................353.219ms
+··End:     advice ..................................................................153.242s
+··Start:   lookups
+··End:     lookups .................................................................24.556s
+··Start:   permutations comitted
+··End:     permutations comitted ...................................................25.420s
+··Start:   lookups commited
+··End:     lookups commited ........................................................10.225s
+··Start:   vanishing commit
+··End:     vanishing commit ........................................................2.110s
+··Start:   h_poly
+····Start:   expressions
+····End:     expressions ...........................................................55.326s
+····Start:   permutations
+····End:     permutations ..........................................................5.006s
+····Start:   eval_h_lookups
+····End:     eval_h_lookups ........................................................71.461s
+··End:     h_poly ..................................................................135.201s
+··Start:   vanishing construct
+do once!
+··End:     vanishing construct .....................................................21.748s
+··Start:   eval poly
+··End:     eval poly ...............................................................753.205ms
+··Start:   eval poly vanishing
+··End:     eval poly vanishing .....................................................278.838ms
+··Start:   eval poly permutation
+··End:     eval poly permutation ...................................................892.145ms
+··Start:   eval poly lookups
+··End:     eval poly lookups .......................................................138.261ms
+··Start:   multi open
+··End:     multi open ..............................................................21.539s
+End:     create proof ..............................................................397.608s
+write transcript to "./build/step-circuit.0.transcript.data"
+write instance to "./build/step-circuit.0.instance.data"
+Start:   origin verify single proof
+End:     origin verify single proof ................................................20.212ms
+Start:   native verify single proof
+End:     native verify single proof ................................................51.743ms
+test aggregation::test_single_step_circuit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 1003.63s

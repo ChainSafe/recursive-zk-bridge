@@ -1,0 +1,99 @@
+running 1 test
+read params K=22 from "./build/K22.params"
+quotient_poly_degree 8
+Start:   assign::bls_verification
+End:     assign::bls_verification ..................................................4.755s
+Start:   assign::bls_verification
+End:     assign::bls_verification ..................................................4.539s
+Start:   assign::sync_committee_ssz
+End:     assign::sync_committee_ssz ................................................195.513ms
+test aggregation::test_single_step_circuit has been running for over 60 seconds
+Start:   generate pkey
+··Start:   assign::bls_verification
+··End:     assign::bls_verification ................................................4.721s
+··Start:   assign::bls_verification
+··End:     assign::bls_verification ................................................4.535s
+··Start:   assign::sync_committee_ssz
+··End:     assign::sync_committee_ssz ..............................................210.651ms
+End:     generate pkey .............................................................79.265s
+Start:   create proof
+··Start:   instance
+··End:     instance ................................................................26.036µs
+··Start:   advice
+····Start:   assign::bls_verification
+····End:     assign::bls_verification ..............................................4.689s
+····Start:   assign::bls_verification
+····End:     assign::bls_verification ..............................................4.249s
+····Start:   assign::sync_committee_ssz
+····End:     assign::sync_committee_ssz ............................................292.422ms
+··End:     advice ..................................................................49.855s
+··Start:   lookups
+··End:     lookups .................................................................20.617s
+··Start:   permutations comitted
+··End:     permutations comitted ...................................................7.839s
+··Start:   lookups commited
+··End:     lookups commited ........................................................4.507s
+··Start:   vanishing commit
+··End:     vanishing commit ........................................................767.616ms
+··Start:   h_poly
+····Start:   expressions
+····End:     expressions ...........................................................105.300s
+····Start:   permutations
+····End:     permutations ..........................................................8.928s
+····Start:   eval_h_lookups
+····End:     eval_h_lookups ........................................................9.511s
+··End:     h_poly ..................................................................127.050s
+··Start:   vanishing construct
+do once!
+··End:     vanishing construct .....................................................6.566s
+··Start:   eval poly
+··End:     eval poly ...............................................................882.769ms
+··Start:   eval poly vanishing
+··End:     eval poly vanishing .....................................................280.135ms
+··Start:   eval poly permutation
+··End:     eval poly permutation ...................................................725.920ms
+··Start:   eval poly lookups
+··End:     eval poly lookups .......................................................249.148ms
+··Start:   multi open
+··End:     multi open ..............................................................7.304s
+End:     create proof ..............................................................227.739s
+write transcript to "./build/step-circuit.0.transcript.data"
+write instance to "./build/step-circuit.0.instance.data"
+proof[0] size 5344 bytes
+Start:   origin verify single proof
+End:     origin verify single proof ................................................22.110ms
+Start:   native verify single proof
+End:     native verify single proof ................................................50.845ms
+test aggregation::test_single_step_circuit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 377.57s
+
+     Running unittests src/lib.rs (target/release/deps/common-85e8d8790e939f58)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+        Command being timed: "cargo test -r test_single_step_circuit -F=cuda -- --nocapture"
+        User time (seconds): 4543.11
+        System time (seconds): 124.25
+        Percent of CPU this job got: 1184%
+        Elapsed (wall clock) time (h:mm:ss or m:ss): 6:33.88
+        Average shared text size (kbytes): 0
+        Average unshared data size (kbytes): 0
+        Average stack size (kbytes): 0
+        Average total size (kbytes): 0
+        Maximum resident set size (kbytes): 96276284
+        Average resident set size (kbytes): 0
+        Major (requiring I/O) page faults: 0
+        Minor (reclaiming a frame) page faults: 48051917
+        Voluntary context switches: 96184
+        Involuntary context switches: 14003
+        Swaps: 0
+        File system inputs: 0
+        File system outputs: 56000
+        Socket messages sent: 0
+        Socket messages received: 0
+        Signals delivered: 0
+        Page size (bytes): 4096
+        Exit status: 0

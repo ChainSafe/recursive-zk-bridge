@@ -1,0 +1,225 @@
+running 1 test
+read params K=23 from "./build/K23.params"
+quotient_poly_degree 8
+Start:   assign::bls_verification
+End:     assign::bls_verification ..................................................3.396s
+Start:   assign::bls_verification
+End:     assign::bls_verification ..................................................3.276s
+Start:   assign::sync_committee_ssz
+End:     assign::sync_committee_ssz ................................................3.403s
+test aggregation::test_proof_aggregation_circuit has been running for over 60 seconds
+Start:   generate pkey
+··Start:   assign::bls_verification
+··End:     assign::bls_verification ................................................3.398s
+··Start:   assign::bls_verification
+··End:     assign::bls_verification ................................................3.272s
+··Start:   assign::sync_committee_ssz
+··End:     assign::sync_committee_ssz ..............................................3.381s
+End:     generate pkey .............................................................499.458s
+Start:   create proof
+··Start:   instance
+··End:     instance ................................................................27.174µs
+··Start:   advice
+····Start:   assign::bls_verification
+····End:     assign::bls_verification ..............................................3.384s
+····Start:   assign::bls_verification
+····End:     assign::bls_verification ..............................................3.113s
+····Start:   assign::sync_committee_ssz
+····End:     assign::sync_committee_ssz ............................................5.780s
+··End:     advice ..................................................................141.560s
+··Start:   lookups
+··End:     lookups .................................................................24.563s
+··Start:   permutations comitted
+··End:     permutations comitted ...................................................20.173s
+··Start:   lookups commited
+··End:     lookups commited ........................................................10.800s
+··Start:   vanishing commit
+··End:     vanishing commit ........................................................2.589s
+··Start:   h_poly
+····Start:   expressions
+····End:     expressions ...........................................................73.666s
+····Start:   permutations
+····End:     permutations ..........................................................4.792s
+····Start:   eval_h_lookups
+····End:     eval_h_lookups ........................................................61.535s
+··End:     h_poly ..................................................................142.674s
+··Start:   vanishing construct
+do once!
+··End:     vanishing construct .....................................................26.675s
+··Start:   eval poly
+··End:     eval poly ...............................................................588.199ms
+··Start:   eval poly vanishing
+··End:     eval poly vanishing .....................................................248.254ms
+··Start:   eval poly permutation
+··End:     eval poly permutation ...................................................518.794ms
+··Start:   eval poly lookups
+··End:     eval poly lookups .......................................................134.357ms
+··Start:   multi open
+··End:     multi open ..............................................................28.645s
+End:     create proof ..............................................................400.448s
+write transcript to "./build/step-circuit.0.transcript.data"
+write instance to "./build/step-circuit.0.instance.data"
+quotient_poly_degree 8
+Start:   assign::bls_verification
+End:     assign::bls_verification ..................................................3.374s
+Start:   assign::bls_verification
+End:     assign::bls_verification ..................................................3.241s
+Start:   assign::sync_committee_ssz
+End:     assign::sync_committee_ssz ................................................3.365s
+Start:   generate pkey
+··Start:   assign::bls_verification
+··End:     assign::bls_verification ................................................3.371s
+··Start:   assign::bls_verification
+··End:     assign::bls_verification ................................................3.248s
+··Start:   assign::sync_committee_ssz
+··End:     assign::sync_committee_ssz ..............................................3.359s
+End:     generate pkey .............................................................496.400s
+Start:   create proof
+··Start:   instance
+··End:     instance ................................................................22.607µs
+··Start:   advice
+····Start:   assign::bls_verification
+····End:     assign::bls_verification ..............................................3.381s
+····Start:   assign::bls_verification
+····End:     assign::bls_verification ..............................................3.096s
+····Start:   assign::sync_committee_ssz
+····End:     assign::sync_committee_ssz ............................................5.796s
+··End:     advice ..................................................................140.168s
+··Start:   lookups
+··End:     lookups .................................................................24.481s
+··Start:   permutations comitted
+··End:     permutations comitted ...................................................19.873s
+··Start:   lookups commited
+··End:     lookups commited ........................................................10.837s
+··Start:   vanishing commit
+··End:     vanishing commit ........................................................2.582s
+··Start:   h_poly
+····Start:   expressions
+····End:     expressions ...........................................................73.239s
+····Start:   permutations
+····End:     permutations ..........................................................4.793s
+····Start:   eval_h_lookups
+····End:     eval_h_lookups ........................................................61.812s
+··End:     h_poly ..................................................................142.524s
+··Start:   vanishing construct
+do once!
+··End:     vanishing construct .....................................................26.856s
+··Start:   eval poly
+··End:     eval poly ...............................................................592.917ms
+··Start:   eval poly vanishing
+··End:     eval poly vanishing .....................................................248.209ms
+··Start:   eval poly permutation
+··End:     eval poly permutation ...................................................517.588ms
+··Start:   eval poly lookups
+··End:     eval poly lookups .......................................................134.060ms
+··Start:   multi open
+··End:     multi open ..............................................................26.035s
+End:     create proof ..............................................................396.127s
+write transcript to "./build/step-circuit.1.transcript.data"
+write instance to "./build/step-circuit.1.instance.data"
+Start:   origin verify single proof
+End:     origin verify single proof ................................................174.699ms
+Start:   native verify single proof
+End:     native verify single proof ................................................693.843ms
+Start:   origin verify single proof
+End:     origin verify single proof ................................................175.636ms
+Start:   native verify single proof
+End:     native verify single proof ................................................692.462ms
+Start:   circuit verify single proof
+End:     circuit verify single proof ...............................................7.082s
+read params K=23 from "./build/K23.params"
+quotient_poly_degree 4
+Start:   synthesize
+··Start:   assign
+··End:     assign ..................................................................3.649µs
+End:     synthesize ................................................................13.317µs
+Start:   synthesize
+··Start:   assign
+··End:     assign ..................................................................2.456s
+End:     synthesize ................................................................2.606s
+Start:   generate pkey
+··Start:   synthesize
+····Start:   assign
+····End:     assign ................................................................3.268µs
+··End:     synthesize ..............................................................14.088µs
+··Start:   synthesize
+····Start:   assign
+····End:     assign ................................................................2.416s
+··End:     synthesize ..............................................................2.566s
+End:     generate pkey .............................................................134.429s
+Start:   create proof
+··Start:   instance
+··End:     instance ................................................................4.093s
+··Start:   advice
+····Start:   synthesize
+······Start:   assign
+······End:     assign ..............................................................3.613µs
+····End:     synthesize ............................................................14.417µs
+····Start:   synthesize
+······Start:   assign
+······End:     assign ..............................................................1.837s
+····End:     synthesize ............................................................1.853s
+··End:     advice ..................................................................32.533s
+··Start:   lookups
+··End:     lookups .................................................................15.801s
+··Start:   permutations comitted
+··End:     permutations comitted ...................................................18.177s
+··Start:   lookups commited
+··End:     lookups commited ........................................................7.182s
+··Start:   vanishing commit
+··End:     vanishing commit ........................................................2.584s
+··Start:   h_poly
+····Start:   expressions
+····End:     expressions ...........................................................1.724s
+····Start:   permutations
+····End:     permutations ..........................................................1.578s
+····Start:   eval_h_lookups
+····End:     eval_h_lookups ........................................................20.370s
+··End:     h_poly ..................................................................24.667s
+··Start:   vanishing construct
+do once!
+··End:     vanishing construct .....................................................13.370s
+··Start:   eval poly
+··End:     eval poly ...............................................................236.456ms
+··Start:   eval poly vanishing
+··End:     eval poly vanishing .....................................................168.877ms
+··Start:   eval poly permutation
+··End:     eval poly permutation ...................................................587.539ms
+··Start:   eval poly lookups
+··End:     eval poly lookups .......................................................86.942ms
+··Start:   multi open
+··End:     multi open ..............................................................24.826s
+End:     create proof ..............................................................144.791s
+write transcript to "./build/verify-circuit.0.transcript.data"
+write instance to "./build/verify-circuit.0.instance.data"
+Start:   origin verify single proof
+End:     origin verify single proof ................................................6.203ms
+Start:   native verify single proof
+End:     native verify single proof ................................................16.687ms
+test aggregation::test_proof_aggregation_circuit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 2289.78s
+
+        Command being timed: "cargo test --release --package committee-rotation-halo2 test_proof_aggregation_circuit -- --nocapture"
+        User time (seconds): 47998.69
+        System time (seconds): 454.65
+        Percent of CPU this job got: 2105%
+        Elapsed (wall clock) time (h:mm:ss or m:ss): 38:20.83
+        Average shared text size (kbytes): 0
+        Average unshared data size (kbytes): 0
+        Average stack size (kbytes): 0
+        Average total size (kbytes): 0
+        Maximum resident set size (kbytes): 175162560
+        Average resident set size (kbytes): 0
+        Major (requiring I/O) page faults: 4
+        Minor (reclaiming a frame) page faults: 245335879
+        Voluntary context switches: 9028520
+        Involuntary context switches: 185194
+        Swaps: 0
+        File system inputs: 1048952
+        File system outputs: 50256
+        Socket messages sent: 0
+        Socket messages received: 0
+        Signals delivered: 0
+        Page size (bytes): 4096
+        Exit status: 0
