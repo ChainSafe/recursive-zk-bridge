@@ -19,5 +19,3 @@ For GPU-accelerated proof generation, run:
 export EC_GPU_CUDA_NVCC_ARGS="--fatbin --gpu-architecture=sm_70 --generate-code=arch=compute_70,code=sm_70"
 cargo test --release --features=cuda --package committee-rotation-halo2 test_proof_aggregation_circuit -- --nocapture
 ```
-
-> Currently GPU-accelerated setup gives no reasonable performance boost.
